@@ -89,6 +89,10 @@ export type Restaurant = {
   priceForOne?: number | null;
   priceForTwo?: number | null;
   vegOnly: boolean;
+  // Restaurant-level dietary tag ("veg" | "non-veg"). Real backend data has no
+  // foodType field, so it's derived from vegOnly when normalizing; mock
+  // fallback data carries it explicitly. Used for the All/Veg/Non-Veg filter.
+  foodType?: "veg" | "non-veg";
   offers: RestaurantOffer[];
   isOpen: boolean;
   area: string;
@@ -123,6 +127,36 @@ export type CartLineItem = {
 export const DELIVERY_INSTRUCTIONS = ["Don't ring bell", "Leave at door", "Call on arrival", "Avoid plastic cutlery"] as const;
 export type DeliveryInstruction = (typeof DELIVERY_INSTRUCTIONS)[number];
 
+// --- Cart domains --------------------------------------------------------
+
+// The cart has two independent domains. FOOD is a single-restaurant cart;
+// STORE is the GoCart Store cart that combines Grocery + Vegetables + Mart.
+export type CartDomain = "FOOD" | "STORE";
+
+// Store product lines share the GoCart Store cart regardless of which store
+// service (Grocery/Vegetables/Mart) the product belongs to.
+export type StoreCartLineItem = {
+  lineId: string;
+  productId: string;
+  service: "GROCERY" | "VEGETABLES" | "MART";
+  name: string;
+  imageUrl?: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+// Mirrors the backend's store-order bill in POST /api/v1/customer/service-orders.
+export type StoreCartBill = {
+  itemTotal: number;
+  couponDiscount: number;
+  deliveryFee: number;
+  platformFee: number;
+  taxes: number;
+  tip: number;
+  total: number;
+};
+
 // --- Coupons --------------------------------------------------------------
 
 export type Coupon = {
@@ -133,6 +167,13 @@ export type Coupon = {
   value: number;
   minOrder: number;
   maxDiscount?: number | null;
+  // Optional dietary scoping for offer banners ("veg" | "non-veg"). Real
+  // backend coupons carry no foodType (they apply platform-wide) so they always
+  // show; mock offers use it to honour the existing veg filter when active.
+  foodType?: "veg" | "non-veg";
+  // Optional banner image for the "Offers for You" cards. Backend coupons are
+  // text-only; mock offers include a food image.
+  imageUrl?: string | null;
   targetRestaurantIds: string[];
   targetRestaurantNames: string[];
   targetFoodItemIds: string[];

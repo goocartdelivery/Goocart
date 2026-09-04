@@ -1,31 +1,50 @@
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Animated, Platform, Pressable, Share, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { ScreenHeader } from "@/components/ScreenHeader";
-import { EmptyState } from "@/components/EmptyState";
-import { MenuItemCard } from "@/components/MenuItemCard";
-import { StickyCartBar } from "@/components/StickyCartBar";
-import { CustomizeSheet } from "@/components/CustomizeSheet";
-import { SkeletonBlock } from "@/components/SkeletonBlock";
 import { restaurantService } from "@/services/RestaurantService";
-import { colors, radius, spacing, typography } from "@/theme";
-import { Icon } from "@/components/Icon";
 import { cartLineId, useCartBill, useCartItemCount, useCartStore } from "@/store/useCartStore";
 import { useFavoritesStore } from "@/store/useFavoritesStore";
+import { colors, radius, spacing } from "@/theme";
+import { Icon } from "@/components/Icon";
+import { EmptyState } from "@/components/EmptyState";
+import { SkeletonBlock } from "@/components/SkeletonBlock";
+import { StickyCartBar } from "@/components/StickyCartBar";
+import { CustomizeSheet } from "@/components/CustomizeSheet";
+import { RestaurantHeader } from "@/components/restaurant/RestaurantHeader";
+import { RestaurantInfo } from "@/components/restaurant/RestaurantInfo";
+import { RestaurantOffers } from "@/components/restaurant/RestaurantOffers";
+import { MenuSearchBar } from "@/components/restaurant/MenuSearchBar";
+import { MenuFilters, MenuFilterState } from "@/components/restaurant/MenuFilters";
+import { MenuCategoryNav } from "@/components/restaurant/MenuCategoryNav";
+import { MenuSection } from "@/components/restaurant/MenuSection";
+import { FoodItemCard } from "@/components/restaurant/FoodItemCard";
 import { CartLineItem, FoodItem, MenuCategory, Restaurant } from "@/types";
+
+const COMPACT_H = 52;
+const NAV_H = 56;
+const STICKY_OFFSET = COMPACT_H + NAV_H + 8;
+
+const EMPTY_FILTERS: MenuFilterState = { vegOnly: false, bestsellerOnly: false, rated4Plus: false };
 
 export default function RestaurantScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+
   const [restaurant, setRestaurant] = useState<Restaurant | null | undefined>(undefined);
   const [menu, setMenu] = useState<FoodItem[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+
   const [menuSearch, setMenuSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [filters, setFilters] = useState<MenuFilterState>(EMPTY_FILTERS);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [customizeItem, setCustomizeItem] = useState<FoodItem | null>(null);
+  const [inlineNavTop, setInlineNavTop] = useState(99999);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const scrollY = useMemo(() => new Animated.Value(0), []);
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionOffsets = useRef<Record<string, number>>({});
 
   const cartRestaurantId = useCartStore((s) => s.restaurantId);
   const cartRestaurantName = useCartStore((s) => s.restaurantName);
@@ -34,6 +53,7 @@ export default function RestaurantScreen() {
   const bill = useCartBill();
   const addItem = useCartStore((s) => s.addItem);
   const replaceCartWithItem = useCartStore((s) => s.replaceCartWithItem);
+  const updateQty = useCartStore((s) => s.updateQty);
 
   const isFavorite = useFavoritesStore((s) => (id ? s.isFavorite(id) : false));
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
@@ -64,23 +84,46 @@ export default function RestaurantScreen() {
     };
   }, [id]);
 
-  const visibleItems = useMemo(() => {
-    let items = menu;
-    if (menuSearch.trim()) {
-      const q = menuSearch.trim().toLowerCase();
-      items = items.filter((item) => item.name.toLowerCase().includes(q));
-    } else if (activeCategory) {
-      items = items.filter((item) => item.categoryId === activeCategory);
-    }
-    return items;
-  }, [menu, menuSearch, activeCategory]);
+  const isSearch = menuSearch.trim().length > 0;
 
-  const quantityFor = (foodItemId: string) => cartItems.filter((i) => i.foodItemId === foodItemId).reduce((sum, i) => sum + i.quantity, 0);
+  const passesFilters = useCallback(
+    (item: FoodItem) => {
+      if (filters.vegOnly && !item.veg) return false;
+      if (filters.bestsellerOnly && !item.bestseller) return false;
+      if (filters.rated4Plus && (item.rating ?? 0) < 4) return false;
+      return true;
+    },
+    [filters],
+  );
+
+  const quantityFor = (foodItemId: string) =>
+    cartItems.filter((i) => i.foodItemId === foodItemId).reduce((sum, i) => sum + i.quantity, 0);
+
+  const visibleCategories = useMemo(() => {
+    if (isSearch) return categories;
+    return categories.filter((c) => menu.some((i) => i.categoryId === c.id && i.available && passesFilters(i)));
+  }, [categories, menu, isSearch, passesFilters]);
+
+  const visibleCountFor = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of categories) {
+      map[c.id] = menu.filter((i) => i.categoryId === c.id && i.available && passesFilters(i)).length;
+    }
+    return map;
+  }, [categories, menu, passesFilters]);
+
+  const searchResults = useMemo(() => {
+    if (!isSearch) return [];
+    const q = menuSearch.trim().toLowerCase();
+    return menu.filter((item) => item.name.toLowerCase().includes(q));
+  }, [isSearch, menuSearch, menu]);
+
+  const keyedActive = useMemo(() => activeCategory ?? visibleCategories[0]?.id ?? null, [activeCategory, visibleCategories]);
 
   const commitLine = (line: CartLineItem) => {
     if (!restaurant) return;
     const result = addItem(restaurant.id, restaurant.name, line);
-    if (result.conflict) {
+    if (result.conflict && cartRestaurantName) {
       Alert.alert(
         "Start a new cart?",
         `Your cart contains items from ${cartRestaurantName}. Adding items from another restaurant will clear your current cart.`,
@@ -89,13 +132,14 @@ export default function RestaurantScreen() {
           { text: "Start New Cart", style: "destructive", onPress: () => replaceCartWithItem(restaurant.id, restaurant.name, line) },
         ],
       );
+      return;
     }
     setCustomizeItem(null);
   };
 
   const onAdd = (item: FoodItem) => {
     if (!restaurant?.isOpen) {
-      Alert.alert("Restaurant closed", `${restaurant?.name} is not accepting orders right now.`);
+      Alert.alert("Restaurant closed", `${restaurant?.name ?? "This restaurant"} is not accepting orders right now.`);
       return;
     }
     if (item.variants?.length || item.addonGroups?.length) {
@@ -116,16 +160,88 @@ export default function RestaurantScreen() {
     commitLine(line);
   };
 
+  const onIncrement = (item: FoodItem) => {
+    if (!restaurant?.isOpen) {
+      Alert.alert("Restaurant closed", `${restaurant?.name ?? "This restaurant"} is not accepting orders right now.`);
+      return;
+    }
+    const hasChoices = Boolean(item.variants?.length || item.addonGroups?.length);
+    if (hasChoices) {
+      setCustomizeItem(item);
+      return;
+    }
+    const lineId = cartLineId(item.id);
+    const existing = cartItems.find((i) => i.lineId === lineId);
+    if (existing) updateQty(lineId, 1);
+    else onAdd(item);
+  };
+
+  const onDecrement = (item: FoodItem) => {
+    const line = cartItems.find((i) => i.foodItemId === item.id);
+    if (line) updateQty(line.lineId, -1);
+  };
+
+  const toggleFilter = (key: keyof MenuFilterState) => setFilters((f) => ({ ...f, [key]: !f[key] }));
+
+  const onShare = async () => {
+    if (!restaurant) return;
+    const message = `${restaurant.name} — ${restaurant.cuisines.join(", ")} · ★ ${restaurant.rating.toFixed(1)} · ${restaurant.area} · on Goocart`;
+    try {
+      await Share.share({ message });
+    } catch {
+      // Native share unavailable (e.g. desktop/web) — gracefully fall back to
+      // copying the restaurant details to the clipboard.
+      if (Platform.OS === "web") {
+        try {
+          const clipboard = (navigator as { clipboard?: { writeText: (t: string) => Promise<void> } }).clipboard;
+          await clipboard?.writeText(message);
+          Alert.alert("Link copied", "Restaurant details copied to clipboard.");
+        } catch {
+          // Clipboard unavailable — nothing more we can do.
+        }
+      }
+    }
+  };
+
+  const selectCategory = (catId: string) => {
+    setActiveCategory(catId);
+    const y = sectionOffsets.current[catId];
+    if (y !== undefined && scrollRef.current) {
+      scrollRef.current.scrollTo({ y: Math.max(0, y - STICKY_OFFSET), animated: true });
+    }
+  };
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    scrollY.setValue(y);
+    setCollapsed(y >= inlineNavTop);
+    if (isSearch) return;
+    let current: string | null = null;
+    for (const c of visibleCategories) {
+      const off = sectionOffsets.current[c.id];
+      if (off !== undefined && off <= y + STICKY_OFFSET) current = c.id;
+      else break;
+    }
+    setActiveCategory((prev) => current ?? prev);
+  };
+
+  const compactOpacity = scrollY.interpolate({
+    inputRange: [inlineNavTop - 60, inlineNavTop - 16],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+
+  // ---- Loading / error states ------------------------------------------------
   if (restaurant === undefined) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <ScreenHeader title="Loading…" />
-        <View style={{ padding: spacing.xl, gap: spacing.md }}>
-          <SkeletonBlock width="100%" height={140} />
+        <View style={{ padding: spacing.xl, gap: spacing.md, paddingTop: spacing.xxxl }}>
+          <SkeletonBlock width="100%" height={220} />
           <SkeletonBlock width="60%" height={20} />
           <SkeletonBlock width="40%" height={14} />
-          <SkeletonBlock width="90%" height={70} />
-          <SkeletonBlock width="90%" height={70} />
+          <SkeletonBlock width="100%" height={34} />
+          <SkeletonBlock width="100%" height={70} />
+          <SkeletonBlock width="100%" height={70} />
         </View>
       </SafeAreaView>
     );
@@ -134,173 +250,134 @@ export default function RestaurantScreen() {
   if (restaurant === null) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <ScreenHeader title="Restaurant" />
-        <EmptyState icon="alert" title={loadError ? "Couldn’t load restaurant" : "Restaurant unavailable"} copy={loadError ?? "This restaurant could not be found. It may have been removed."} />
+        <EmptyState
+          icon="alert"
+          title={loadError ? "Couldn’t load restaurant" : "Restaurant unavailable"}
+          copy={loadError ?? "This restaurant could not be found. It may have been removed."}
+        />
       </SafeAreaView>
     );
   }
 
+  const showNav = !isSearch && visibleCategories.length > 1;
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScreenHeader
-        title={restaurant.name}
-        subtitle={restaurant.isOpen ? undefined : "Closed now"}
-        right={
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <Pressable style={styles.iconBtn} onPress={() => setSearchOpen((v) => !v)}>
-              <Icon name="search" size={17} color={colors.text} />
-            </Pressable>
-            <Pressable style={styles.iconBtn} onPress={() => toggleFavorite(restaurant.id)}>
-              <Icon name={isFavorite ? "heartFilled" : "heart"} size={17} color={isFavorite ? colors.error : colors.text} />
-            </Pressable>
-          </View>
-        }
-      />
+      <Animated.ScrollView
+        ref={scrollRef}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: totalItems > 0 ? 120 : spacing.xl }}
+      >
+        <RestaurantHeader
+          scrollY={scrollY}
+          collapseOffset={inlineNavTop}
+          restaurant={restaurant}
+          isFavorite={isFavorite}
+          onToggleFavorite={() => toggleFavorite(restaurant.id)}
+          onShare={onShare}
+          onBack={() => router.back()}
+        />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: totalItems > 0 ? 120 : spacing.xl }} keyboardShouldPersistTaps="handled">
-        <View style={styles.infoBlock}>
-          <View style={styles.row}>
-            <Text style={styles.rating}>★ {restaurant.rating.toFixed(1)}</Text>
-            <Text style={typography.caption}>({restaurant.ratingCount})</Text>
-            <Text style={styles.dot}>•</Text>
-            <Text style={typography.caption}>
-              {restaurant.deliveryTimeMin}–{restaurant.deliveryTimeMax} min
-            </Text>
-            <Text style={styles.dot}>•</Text>
-            <Text style={typography.caption}>{restaurant.distanceKm} km</Text>
-          </View>
-          <Text style={typography.caption}>{restaurant.cuisines.join(", ")}</Text>
-          {restaurant.priceForTwo ? <Text style={typography.caption}>₹{restaurant.priceForTwo} for two</Text> : null}
-          <Text style={typography.caption}>{restaurant.area}</Text>
+        <RestaurantInfo restaurant={restaurant} />
+        <RestaurantOffers restaurant={restaurant} />
 
-          {restaurant.offers.length > 0 && (
-            <View style={styles.offers}>
-              {restaurant.offers.map((offer) => (
-                <View key={offer.title} style={styles.offerRow}>
-                  <Icon name="offer" size={15} color={colors.primary} />
-                  <View>
-                    <Text style={typography.bodyStrong}>{offer.title}</Text>
-                    {offer.description ? <Text style={typography.caption}>{offer.description}</Text> : null}
-                  </View>
-                </View>
-              ))}
+        <View style={styles.controls}>
+          <MenuSearchBar value={menuSearch} onChangeText={setMenuSearch} />
+          {!isSearch ? <MenuFilters filters={filters} onToggle={toggleFilter} /> : null}
+        </View>
+
+        {isSearch ? (
+          <View style={styles.searchList}>
+            {searchResults.length === 0 ? (
+              <EmptyState icon="search" title="No dishes found" copy={`Nothing matches "${menuSearch.trim()}".`} />
+            ) : (
+              searchResults.map((item) => (
+                <FoodItemCard
+                  key={item.id}
+                  item={item}
+                  quantityInCart={quantityFor(item.id)}
+                  onAdd={() => onAdd(item)}
+                  onIncrement={() => onIncrement(item)}
+                  onDecrement={() => onDecrement(item)}
+                />
+              ))
+            )}
+          </View>
+        ) : (
+          <>
+            <View onLayout={(e) => setInlineNavTop(e.nativeEvent.layout.y)} style={styles.inlineNav}>
+              <MenuCategoryNav categories={visibleCategories} activeKey={keyedActive} onSelect={selectCategory} counts={visibleCountFor} />
             </View>
-          )}
-        </View>
 
-        {searchOpen && (
-          <View style={styles.menuSearchWrap}>
-            <TextInput
-              value={menuSearch}
-              onChangeText={setMenuSearch}
-              placeholder="Search menu"
-              placeholderTextColor={colors.muted}
-              style={styles.menuSearchInput}
-            />
-          </View>
+            {visibleCategories.length === 0 ? (
+              <EmptyState icon="menu" title="No dishes match" copy="Try changing the filters to see more items." />
+            ) : (
+              visibleCategories.map((cat) => (
+                <MenuSection
+                  key={cat.id}
+                  title={cat.name}
+                  items={menu.filter((i) => i.categoryId === cat.id && i.available && passesFilters(i))}
+                  onLayoutY={(y) => {
+                    sectionOffsets.current[cat.id] = y;
+                  }}
+                  quantityFor={quantityFor}
+                  onAdd={onAdd}
+                  onIncrement={onIncrement}
+                  onDecrement={onDecrement}
+                />
+              ))
+            )}
+          </>
         )}
+      </Animated.ScrollView>
 
-        {!menuSearch && categories.length > 1 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-            <Pressable style={[styles.categoryChip, !activeCategory && styles.categoryChipActive]} onPress={() => setActiveCategory(null)}>
-              <Text style={[styles.categoryChipText, !activeCategory && styles.categoryChipTextActive]}>All</Text>
-            </Pressable>
-            {categories.map((cat) => (
-              <Pressable key={cat.id} style={[styles.categoryChip, activeCategory === cat.id && styles.categoryChipActive]} onPress={() => setActiveCategory(cat.id)}>
-                <Text style={[styles.categoryChipText, activeCategory === cat.id && styles.categoryChipTextActive]}>{cat.name}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-
-        <View style={styles.menuList}>
-          {visibleItems.length === 0 ? (
-            <EmptyState icon="search" title={menuSearch ? "No dishes found" : "No items in this category"} copy={menuSearch ? `Nothing matches "${menuSearch}".` : "Try a different category."} />
-          ) : (
-            visibleItems.map((item) => <MenuItemCard key={item.id} item={item} quantityInCart={quantityFor(item.id)} onAdd={() => onAdd(item)} />)
-          )}
-        </View>
-      </ScrollView>
-
-      {categories.length > 1 && (
-        <Pressable style={[styles.menuFab, cartRestaurantId === restaurant.id && styles.menuFabRaised]} onPress={() => setCategoryPickerOpen(true)}>
-          <Icon name="menu" size={15} color={colors.white} />
-          <Text style={styles.menuFabText}>MENU</Text>
-        </Pressable>
-      )}
-
-      <Modal visible={categoryPickerOpen} transparent animationType="fade" onRequestClose={() => setCategoryPickerOpen(false)}>
-        <Pressable style={styles.pickerBackdrop} onPress={() => setCategoryPickerOpen(false)}>
-          <View style={styles.pickerSheet}>
-            {categories.map((cat) => (
-              <Pressable
-                key={cat.id}
-                style={styles.pickerRow}
-                onPress={() => {
-                  setActiveCategory(cat.id);
-                  setMenuSearch("");
-                  setCategoryPickerOpen(false);
-                }}
-              >
-                <Text style={typography.body}>{cat.name}</Text>
-              </Pressable>
-            ))}
+      <Animated.View style={[styles.compactBar, { opacity: compactOpacity }]} pointerEvents={collapsed ? "box-none" : "none"}>
+        <View style={styles.compactInner}>
+          <Pressable onPress={() => router.back()} style={styles.compactBtnWrap} accessibilityLabel="Go back">
+            <Icon name="back" size={20} color={colors.dark} />
+          </Pressable>
+          <View style={styles.compactTitleWrap}>
+            <Animated.Text style={styles.compactTitle} numberOfLines={1}>
+              {restaurant.name}
+            </Animated.Text>
+            <Animated.Text style={styles.compactSubtitle} numberOfLines={1}>
+              ★ {restaurant.rating.toFixed(1)} · {restaurant.deliveryTimeMin}–{restaurant.deliveryTimeMax} min
+            </Animated.Text>
           </View>
-        </Pressable>
-      </Modal>
+          <Pressable onPress={() => toggleFavorite(restaurant.id)} style={styles.compactBtnWrap} accessibilityLabel="Toggle favorite">
+            <Icon name={isFavorite ? "heartFilled" : "heart"} size={18} color={isFavorite ? colors.error : colors.dark} />
+          </Pressable>
+        </View>
+      </Animated.View>
+
+      {showNav ? (
+        <Animated.View style={[styles.floatingNav, { opacity: compactOpacity }]} pointerEvents={collapsed ? "box-none" : "none"}>
+          <MenuCategoryNav categories={visibleCategories} activeKey={keyedActive} onSelect={selectCategory} counts={visibleCountFor} />
+        </Animated.View>
+      ) : null}
+
+      {cartRestaurantId === restaurant.id ? (
+        <StickyCartBar itemCount={totalItems} total={bill.itemTotal} onPress={() => router.push("/(tabs)/cart")} />
+      ) : null}
 
       <CustomizeSheet item={customizeItem} visible={!!customizeItem} onClose={() => setCustomizeItem(null)} onConfirm={commitLine} />
-
-      {cartRestaurantId === restaurant.id && (
-        <StickyCartBar itemCount={totalItems} total={bill.itemTotal} onPress={() => router.push("/(tabs)/cart")} />
-      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  iconBtn: { width: 34, height: 34, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  infoBlock: { padding: spacing.xl, gap: 4, borderBottomWidth: 1, borderBottomColor: colors.border },
-  row: { flexDirection: "row", alignItems: "center", gap: 6 },
-  rating: { ...typography.captionStrong, color: colors.success },
-  dot: { color: colors.border },
-  offers: { marginTop: spacing.md, gap: spacing.sm },
-  offerRow: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" },
-  offerIcon: { fontSize: 14, color: colors.primary, fontWeight: "800", width: 20 },
-  menuSearchWrap: { padding: spacing.xl, paddingBottom: 0 },
-  menuSearchInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    ...typography.body,
-  },
-  categoryRow: { gap: spacing.sm, padding: spacing.xl },
-  categoryChip: { paddingHorizontal: spacing.md, height: 34, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  categoryChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  categoryChipText: { ...typography.captionStrong },
-  categoryChipTextActive: { color: colors.white },
-  menuList: { paddingHorizontal: spacing.xl },
-  menuFab: {
-    position: "absolute",
-    right: spacing.lg,
-    bottom: 24,
-    backgroundColor: colors.dark,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radius.pill,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  menuFabRaised: { bottom: 96 },
-  menuFabText: { color: colors.white, fontWeight: "700", fontSize: 11, letterSpacing: 0.5 },
-  pickerBackdrop: { flex: 1, backgroundColor: "#00000055", justifyContent: "center", padding: spacing.xl },
-  pickerSheet: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.sm, maxHeight: "60%" },
-  pickerRow: { paddingVertical: spacing.md, paddingHorizontal: spacing.md },
+  controls: { paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, gap: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  inlineNav: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  searchList: { paddingHorizontal: spacing.xl },
+  compactBar: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  compactInner: { height: COMPACT_H, flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md },
+  compactBtnWrap: { width: 36, height: 36, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  compactTitleWrap: { flex: 1 },
+  compactTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
+  compactSubtitle: { color: colors.muted, fontSize: 11, marginTop: 1 },
+  floatingNav: { position: "absolute", top: COMPACT_H, left: 0, right: 0, zIndex: 29, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
 });

@@ -2,14 +2,29 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Restaurant } from "@/types";
 import { colors, radius, spacing, typography } from "@/theme";
 import { RemoteImage } from "@/components/RemoteImage";
+import { Icon } from "@/components/Icon";
 
-export function RestaurantCard({ restaurant, onPress, wide }: { restaurant: Restaurant; onPress?: () => void; wide?: boolean }) {
+type Props = {
+  restaurant: Restaurant;
+  onPress?: () => void;
+  wide?: boolean;
+  favorite?: boolean;
+  onToggleFav?: () => void;
+};
+
+export function RestaurantCard({ restaurant, onPress, wide, favorite, onToggleFav }: Props) {
   const eta = `${restaurant.deliveryTimeMin}–${restaurant.deliveryTimeMax} min`;
 
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.card, wide && styles.cardWide, pressed && styles.pressed]}>
       <View style={styles.photoWrap}>
         <RemoteImage uri={restaurant.imageUrl} fallbackLabel={restaurant.name} style={wide ? styles.photoWide : styles.photo} />
+
+        {onToggleFav ? (
+          <Pressable style={styles.heartBtn} onPress={onToggleFav} hitSlop={8} accessibilityLabel={favorite ? "Remove from favorites" : "Add to favorites"}>
+            <Icon name={favorite ? "heartFilled" : "heart"} size={18} color={favorite ? colors.error : colors.white} />
+          </Pressable>
+        ) : null}
 
         {/* ETA badge sits on the image so scanning a list answers "how soon?" first */}
         <View style={styles.etaBadge}>
@@ -84,6 +99,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 5,
     borderRadius: radius.sm,
+  },
+  heartBtn: {
+    position: "absolute",
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   etaText: { ...typography.captionStrong, color: colors.text, fontSize: 11 },
   vegBadge: {

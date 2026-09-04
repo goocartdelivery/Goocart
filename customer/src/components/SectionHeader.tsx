@@ -11,5 +11,5 @@ export function SectionHeader({ title, subtitle }: { title: string; subtitle?: s
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 2, marginBottom: spacing.md },
+  wrap: { gap: 2, marginBottom: spacing.md, paddingHorizontal: spacing.lg },
 });

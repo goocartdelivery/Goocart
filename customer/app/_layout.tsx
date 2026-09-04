@@ -12,6 +12,7 @@ import { useRatingStore } from "@/store/useRatingStore";
 import { useCatalogStore } from "@/store/useCatalogStore";
 import { usePricingStore } from "@/store/usePricingStore";
 import { useCartStore } from "@/store/useCartStore";
+import { useStoreCartStore } from "@/store/useStoreCartStore";
 import { initNotificationDeepLinking } from "@/services/PushService";
 
 export default function RootLayout() {
@@ -27,6 +28,7 @@ export default function RootLayout() {
     void useCatalogStore.getState().load();
     void usePricingStore.getState().load();
     void useCartStore.getState().hydrate();
+    void useStoreCartStore.getState().hydrate();
     return initNotificationDeepLinking();
   }, []);
 

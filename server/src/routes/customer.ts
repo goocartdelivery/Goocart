@@ -432,21 +432,32 @@ customerRouter.post("/service-orders", requireAuth, async (req: AuthedRequest, r
 
     const requested = Array.isArray(body.items) ? body.items : [];
     if (!requested.length) return res.status(400).json(fail("EMPTY_CART", "Choose at least one product."));
+
+    // A single GoCart Store order may combine Grocery, Vegetables and Mart
+    // products in one cart/checkout. All store products share the same
+    // store vendor, so every line is validated against its own `service`
+    // (any of the store services) and every line must come from the same
+    // vendor — preserving the existing per-service and single-vendor rules.
+    const STORE_SERVICES = new Set(["Grocery", "Vegetables", "Mart"]);
+    const isStoreOrder = STORE_SERVICES.has(service);
+
     const lines: any[] = [];
     for (const entry of requested) {
       const quantity = Math.floor(Number(entry.quantity));
       const product: any = await Product.findById(entry.productId).lean().catch(() => null);
-      if (!product || product.service !== service) return res.status(409).json(fail("PRODUCT_UNAVAILABLE", "A selected product is no longer available."));
+      const serviceOk = isStoreOrder ? Boolean(product && STORE_SERVICES.has(product.service)) : product?.service === service;
+      if (!product || !serviceOk) return res.status(409).json(fail("PRODUCT_UNAVAILABLE", "A selected product is no longer available."));
       if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20 || product.stock < quantity) return res.status(409).json(fail("OUT_OF_STOCK", `${product.name} does not have enough stock.`));
       lines.push({ product, quantity });
     }
     if (lines.some((line) => String(line.product.vendorId) !== String(lines[0].product.vendorId))) return res.status(409).json(fail("MULTI_VENDOR_CART", "Place separate orders for different stores."));
     const pricing = await getPricingSettings();
+    const rawTip = Math.max(0, Math.round(Number(body.tip ?? 0)) || 0);
     const subtotal = Math.round(lines.reduce((sum, line) => sum + line.product.price * line.quantity, 0));
     const taxes = Math.round(subtotal * pricing.taxRatePercent / 100);
     const vendorCommission = Math.round(subtotal * pricing.vendorCommissionPercent / 100);
     const vendorPayable = subtotal - vendorCommission;
-    const total = subtotal + pricing.deliveryFee + pricing.platformFee + taxes;
+    const total = subtotal + pricing.deliveryFee + pricing.platformFee + taxes + rawTip;
     // Reserve is atomic and all-or-nothing across every line (a Mongo
     // transaction): either the whole cart's stock is held, or none of it is
     // — a cart that fails on its third item can no longer leave the first
@@ -457,16 +468,21 @@ customerRouter.post("/service-orders", requireAuth, async (req: AuthedRequest, r
       return res.status(409).json(fail("OUT_OF_STOCK", `${failedLine?.product.name ?? "An item"} just sold out.`));
     }
 
+    const distinctServices = Array.from(new Set(lines.map((line) => line.product.service)));
+    const combined = distinctServices.length > 1;
     const prefix: Record<string, string> = { Grocery: "GR", Vegetables: "VG", Mart: "MT" };
-    const reference = `GOO-${prefix[service]}-${new Date().getFullYear()}-${String(await nextSequence("serviceOrderNumber")).padStart(6, "0")}`;
+    const reference = `GOO-${combined ? "ST" : prefix[service]}-${new Date().getFullYear()}-${String(await nextSequence("serviceOrderNumber")).padStart(6, "0")}`;
     let order;
     try {
       order = await ServiceOrder.create({
         reference, service, vendorId: lines[0].product.vendorId, vendorName: lines[0].product.vendorName, customerId: req.user!._id, customerName: req.user!.name,
         status: "READY_FOR_PICKUP", total,
         details: {
-          items: lines.map((line) => ({ productId: String(line.product._id), name: line.product.name, quantity: line.quantity, unitPrice: line.product.price, lineTotal: line.product.price * line.quantity })),
-          address: body.address ?? null, subtotal, deliveryFee: pricing.deliveryFee, platformFee: pricing.platformFee, taxes, vendorCommission, vendorPayable, partnerPayout: pricing.deliveryPartnerPayout, platformNetRevenue: pricing.deliveryFee + pricing.platformFee + vendorCommission - pricing.deliveryPartnerPayout, verificationCode: String(Math.floor(1000 + Math.random() * 9000)),
+          items: lines.map((line) => ({ productId: String(line.product._id), name: line.product.name, service: line.product.service, quantity: line.quantity, unitPrice: line.product.price, lineTotal: line.product.price * line.quantity })),
+          services: distinctServices, serviceGroup: "GoCart Store",
+          address: body.address ?? null,
+          bill: { itemTotal: subtotal, restaurantDiscount: 0, couponDiscount: 0, deliveryFee: pricing.deliveryFee, platformFee: pricing.platformFee, taxes, tip: rawTip, total },
+          subtotal, deliveryFee: pricing.deliveryFee, platformFee: pricing.platformFee, taxes, tip: rawTip, vendorCommission, vendorPayable, partnerPayout: pricing.deliveryPartnerPayout, platformNetRevenue: pricing.deliveryFee + pricing.platformFee + vendorCommission - pricing.deliveryPartnerPayout, verificationCode: String(Math.floor(1000 + Math.random() * 9000)),
           reservationIds: reserved.reservations.map((r) => r.reservationId),
         },
       });

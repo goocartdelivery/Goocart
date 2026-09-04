@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -11,6 +11,7 @@ import { FarePreview, serviceOrderService, ServicePricing, ServiceProduct } from
 import { useAuthStore } from "@/store/useAuthStore";
 import { useLocationStore } from "@/store/useLocationStore";
 import { useRideBookingStore } from "@/store/useRideBookingStore";
+import { storeProductRef, useStoreCartBill, useStoreCartStore } from "@/store/useStoreCartStore";
 import { ServiceType } from "@/types";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -27,7 +28,10 @@ export default function ServiceScreen(){
   const setPickup=useRideBookingStore((s)=>s.setPickup);
   const [products,setProducts]=useState<ServiceProduct[]|null>(null);
   const [pricing,setPricing]=useState<ServicePricing|null>(null);
-  const [qty,setQty]=useState<Record<string,number>>({});
+  const storeItems = useStoreCartStore((s) => s.items);
+  const storeAdd = useStoreCartStore((s) => s.addItem);
+  const storeUpdate = useStoreCartStore((s) => s.updateQty);
+  const storeBill = useStoreCartBill();
   const [packageType,setPackageType]=useState("Small package");
   const [preview,setPreview]=useState<FarePreview|null>(null);
   const [previewFor,setPreviewFor]=useState<string|null>(null);
@@ -49,9 +53,17 @@ export default function ServiceScreen(){
   },[isJob,location]);
 
   useEffect(()=>{let cancelled=false;(async()=>{try{const config=await serviceOrderService.configuration();const enabled=config.services.find((row)=>row.key===API_KEY[service])?.enabled!==false;if(!enabled)throw new Error(`${meta.label} is temporarily unavailable.`);if(isJob){if(!cancelled)setPricing(config.pricing.find((row)=>row.service===meta.label)||null);}else{const rows=await serviceOrderService.products(API_KEY[service]);if(!cancelled)setProducts(rows);}setError("");}catch(e){if(!cancelled){setError(e instanceof Error?e.message:"Could not load this service");setProducts([]);}}})();return()=>{cancelled=true;};},[isJob,meta.label,service]);
-  const selected=useMemo(()=>Object.entries(qty).filter(([,value])=>value>0),[qty]);
-  const subtotal=selected.reduce((sum,[id,value])=>sum+(products?.find((p)=>p.id===id)?.price||0)*value,0);
-  const change=(id:string,by:number)=>setQty((current)=>({...current,[id]:Math.max(0,Math.min(20,(current[id]||0)+by))}));
+  const storeCount = storeItems.reduce((sum, i) => sum + i.quantity, 0);
+  const qtyFor = (id: string) => storeItems.find((i) => i.productId === id)?.quantity ?? 0;
+  const change = (id: string, by: number) => {
+    if (by > 0) {
+      const p = products?.find((x) => x.id === id);
+      if (p) storeAdd(storeProductRef(p));
+      return;
+    }
+    const line = storeItems.find((i) => i.productId === id);
+    if (line) storeUpdate(line.lineId, -1);
+  };
 
   // Distance and fare are never guessed on-device — the server calculates
   // them from the map-picked pickup/drop coordinates, so what's shown here
@@ -69,17 +81,16 @@ export default function ServiceScreen(){
   const book=async()=>{
     if(!user){router.push({pathname:"/login",params:{returnTo:`/service/${service}`}});return;}
     if(isJob&&(!pickup||!drop)){setError("Set both a pickup and drop location.");return;}
+    if(!isJob){router.push("/checkout/store");return;}
     setBusy(true);setError("");
     try{
-      const order=isJob
-        ?await serviceOrderService.place({
-            service:API_KEY[service],pickup:pickup!.address,drop:drop!.address,packageType,
-            pickupLatitude:pickup!.latitude,pickupLongitude:pickup!.longitude,
-            dropLatitude:drop!.latitude,dropLongitude:drop!.longitude,
-          })
-        :await serviceOrderService.place({service:API_KEY[service],items:selected.map(([productId,quantity])=>({productId,quantity})),address:location});
+      const order=await serviceOrderService.place({
+        service:API_KEY[service],pickup:pickup!.address,drop:drop!.address,packageType,
+        pickupLatitude:pickup!.latitude,pickupLongitude:pickup!.longitude,
+        dropLatitude:drop!.latitude,dropLongitude:drop!.longitude,
+      });
       Alert.alert("Confirmed",`${order.reference} has been created for ₹${order.total}.`,[{text:"View activity",onPress:()=>router.replace("/(tabs)/activity")}]);
-      setQty({});setPreview(null);setPreviewFor(null);
+      setPreview(null);setPreviewFor(null);
     }catch(e){setError(e instanceof Error?e.message:"Could not place this request");}
     finally{setBusy(false);}
   };
@@ -99,7 +110,7 @@ export default function ServiceScreen(){
       </View>:<Text style={typography.caption}>Check the fare before booking — distance is calculated from your addresses.</Text>}
       <PrimaryButton label={busy?"Booking…":user?`Book ${meta.label}`:"Sign in to book"} onPress={()=>void book()} disabled={busy||!previewIsCurrent}/>
     </View>:
-    products===null?<Text style={typography.body}>Loading live products…</Text>:products.length===0?<EmptyState icon={meta.icon} title={`No ${meta.label.toLowerCase()} items available`} copy="Admin can add products and stock from the Catalog page."/>:<><Text style={typography.eyebrow}>AVAILABLE NOW</Text>{products.map((product)=><View key={product.id} style={styles.product}><RemoteImage uri={product.imageUrl} fallbackLabel={product.name} style={styles.productImage}/><View style={{flex:1}}><Text style={typography.bodyStrong}>{product.name}</Text><Text style={typography.caption}>{product.vendorName} • {product.description||product.eta}</Text><Text style={styles.price}>₹{product.price} • {product.stock} in stock</Text></View><View style={styles.stepper}><Pressable onPress={()=>change(product.id,-1)}><Text style={styles.step}>−</Text></Pressable><Text style={typography.bodyStrong}>{qty[product.id]||0}</Text><Pressable onPress={()=>change(product.id,1)}><Text style={styles.step}>+</Text></Pressable></View></View>)}<View style={styles.checkout}><View><Text style={typography.caption}>{selected.length} selected</Text><Text style={typography.h3}>Subtotal ₹{subtotal}</Text></View><PrimaryButton label={busy?"Placing…":user?"Place order":"Sign in"} onPress={()=>void book()} disabled={busy||selected.length===0}/></View></>}
+    products===null?<Text style={typography.body}>Loading live products…</Text>:products.length===0?<EmptyState icon={meta.icon} title={`No ${meta.label.toLowerCase()} items available`} copy="Admin can add products and stock from the Catalog page."/>:<><Text style={typography.eyebrow}>AVAILABLE NOW</Text>{products.map((product)=><View key={product.id} style={styles.product}><RemoteImage uri={product.imageUrl} fallbackLabel={product.name} style={styles.productImage}/><View style={{flex:1}}><Text style={typography.bodyStrong}>{product.name}</Text><Text style={typography.caption}>{product.vendorName} • {product.description||product.eta}</Text><Text style={styles.price}>₹{product.price} • {product.stock} in stock</Text></View><View style={styles.stepper}><Pressable onPress={()=>change(product.id,-1)}><Text style={styles.step}>−</Text></Pressable><Text style={typography.bodyStrong}>{qtyFor(product.id)}</Text><Pressable onPress={()=>change(product.id,1)}><Text style={styles.step}>+</Text></Pressable></View></View>)}<View style={styles.checkout}><View><Text style={typography.caption}>{storeCount} item{storeCount===1?"":"s"} in Store Cart</Text><Text style={typography.h3}>₹{storeBill.total}</Text></View><PrimaryButton label={busy?"Placing…":user?"Proceed to Checkout":"Sign in"} onPress={()=>void book()} disabled={busy||storeCount===0}/></View></>}
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }
 

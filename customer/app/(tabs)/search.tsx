@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -8,6 +8,8 @@ import { VegBadge } from "@/components/VegBadge";
 import { RemoteImage } from "@/components/RemoteImage";
 import { colors, radius, spacing, typography } from "@/theme";
 import { restaurantService } from "@/services/RestaurantService";
+import { serviceConfig } from "@/constants/serviceHome";
+import { filterSearchByCategory } from "@/utils/foodFilter";
 import { ServiceType } from "@/types";
 import { SearchResult } from "@/services/RestaurantService";
 
@@ -15,23 +17,30 @@ const RECENT_SEARCHES = ["Biryani", "Milk", "Tomatoes", "Cold Drink"];
 const TRENDING = ["Chicken Biryani", "Pizza", "Milk", "Ice Cream"];
 
 export default function SearchScreen() {
-  const { service } = useLocalSearchParams<{ service?: ServiceType }>();
+  const { service, category } = useLocalSearchParams<{ service?: ServiceType; category?: string }>();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult | null>(null);
+
+  // Resolve the selected subcategory (Biryani/Pizza/Burger/...) so search stays
+  // scoped within it. "All Food" (no category param) applies no filter.
+  const selectedCategory = useMemo(
+    () => (category ? serviceConfig("FOOD").categories.find((c) => c.key === category) ?? null : null),
+    [category],
+  );
 
   useEffect(() => {
     if (!query.trim()) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       restaurantService.searchFood(query).then((r) => {
-        if (!cancelled) setResults(r);
+        if (!cancelled) setResults(filterSearchByCategory(r, selectedCategory));
       });
     }, 200);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, selectedCategory]);
 
   // Grocery/Vegetables/Mart/Bike Taxi/Parcel are fully built — they live at
   // /service/[type] (browsing + checkout, or map-based booking) rather than
