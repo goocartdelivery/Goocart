@@ -10,6 +10,8 @@ import { Icon } from "@/components/Icon";
 import { useCartBill, useCartStore } from "@/store/useCartStore";
 import { useSelectedAddress } from "@/store/useAddressStore";
 import { useOrderStore } from "@/store/useOrderStore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { AuthPromptSheet } from "@/components/AuthPromptSheet";
 import { PaymentMethod, Restaurant } from "@/types";
 import { restaurantService } from "@/services/RestaurantService";
 import { ApiError } from "@/services/apiClient";
@@ -48,7 +50,16 @@ export default function PaymentScreen() {
 
   const address = useSelectedAddress();
   const createOrder = useOrderStore((s) => s.createOrder);
+  const user = useAuthStore((s) => s.user);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+
+  const openAuthPrompt = () => setShowAuthPrompt(true);
+  const goToAuth = (mode: "login" | "signup") => {
+    setShowAuthPrompt(false);
+    router.push({ pathname: "/login", params: { returnTo: "/checkout", mode } });
+  };
 
   useEffect(() => {
     if (!restaurantId) return;

@@ -5,8 +5,13 @@ import { calculateBill } from "@/services/PricingService";
 import { useCatalogStore } from "@/store/useCatalogStore";
 import { usePricingStore } from "@/store/usePricingStore";
 import { BillBreakdown, CartLineItem, DeliveryInstruction } from "@/types";
+import { userStorageKey } from "@/services/userKey";
 
-const STORAGE_KEY = "goocart.cart.v1";
+// Base for the per-user food cart key. Resolved to a user-scoped key at
+// read/write time (see persist/hydrate/clear) so two accounts never share a
+// cart — this is what isolates every authenticated user's cart from everyone
+// else's (on the same device and across devices via per-user keys).
+const STORAGE_BASE = "goocart.cart.v1";
 
 // A cart line is identified by what it actually is, not when it was added, so
 // adding the same configuration twice increments quantity instead of creating
@@ -48,7 +53,7 @@ function persist(state: CartState) {
     instructions: state.instructions,
     tip: state.tip,
   };
-  void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  void AsyncStorage.setItem(userStorageKey(STORAGE_BASE), JSON.stringify(snapshot));
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
@@ -123,14 +128,14 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   clear: () => {
     set({ restaurantId: null, restaurantName: null, items: [], couponCode: null, instructions: [], tip: 0 });
-    void AsyncStorage.removeItem(STORAGE_KEY);
+    void AsyncStorage.removeItem(userStorageKey(STORAGE_BASE));
   },
 
   // A cart must survive the app being backgrounded or restarted; losing it on
   // reload is the fastest way to lose an order.
   hydrate: async () => {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      const raw = await AsyncStorage.getItem(userStorageKey(STORAGE_BASE));
       if (!raw) return;
       const saved = JSON.parse(raw) as PersistedCart;
       set({

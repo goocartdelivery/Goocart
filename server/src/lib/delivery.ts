@@ -12,6 +12,11 @@ export const MAX_RADIUS_KM = Number(process.env.DELIVERY_MAX_RADIUS_KM) || 12;
 export const RADIUS_STEP_KM = Number(process.env.DELIVERY_RADIUS_STEP_KM) || 3;
 export const MAX_OFFER_ATTEMPTS = Number(process.env.DELIVERY_MAX_OFFER_ATTEMPTS) || 3;
 
+// How long a customer waits for a delivery partner before the order is
+// auto-cancelled once the partner search has begun (spec section 14). The
+// countdown starts at the moment the platform starts broadcasting the offer.
+export const PARTNER_SEARCH_AUTO_CANCEL_MS = Number(process.env.PARTNER_SEARCH_AUTO_CANCEL_MS) || 5 * 60_000;
+
 // setTimeout handles for pending offer-expiry / retry checks, keyed by order
 // id. Node keeps a process alive while any of these are pending, so every
 // path that resolves an order (claimed, cancelled, exhausted) clears its
@@ -120,6 +125,14 @@ function clamp01(value: number): number {
 export async function broadcastDeliveryOffer(orderId: unknown, attempt = 1, radiusKm = INITIAL_RADIUS_KM): Promise<void> {
   const order: any = await Order.findById(orderId);
   if (!order || order.partnerId || !["NONE", "EXPIRED"].includes(order.deliveryOfferStatus)) return;
+
+  // The 5-minute partner-search deadline is anchored to the moment the search
+  // begins, once. If it was never set (e.g. an order promoted straight into a
+  // retry), anchor it now.
+  if (!order.autoCancelDeadlineAt) {
+    order.autoCancelDeadlineAt = new Date(Date.now() + PARTNER_SEARCH_AUTO_CANCEL_MS);
+    await order.save();
+  }
 
   const settings = await getAutomationSettings();
   if (attempt === 1) radiusKm = settings.dispatch.initialRadiusKm;
@@ -237,7 +250,7 @@ export async function claimDelivery(orderId: string, partner: { _id: unknown; na
 
   const activeTask = await Order.exists({
     partnerId: partner._id,
-    status: { $nin: ["DELIVERED", "CANCELLED_BY_ADMIN", "CANCELLED_BY_CUSTOMER", "VENDOR_REJECTED"] },
+    status: { $nin: ["DELIVERED", "CANCELLED_BY_ADMIN", "CANCELLED_BY_CUSTOMER", "VENDOR_REJECTED", "AUTO_CANCELLED"] },
   });
   if (activeTask) return { ok: false, code: "PARTNER_HAS_ACTIVE_TASK" };
 
@@ -254,7 +267,7 @@ export async function claimDelivery(orderId: string, partner: { _id: unknown; na
       status: "READY_FOR_PICKUP",
     },
     {
-      $set: { partnerId: partner._id, partnerName: partner.name, status: "DELIVERY_PARTNER_ASSIGNED", deliveryOfferStatus: "ASSIGNED", partnerEtaToStoreMinutes: null },
+      $set: { partnerId: partner._id, partnerName: partner.name, status: "DELIVERY_PARTNER_ASSIGNED", deliveryOfferStatus: "ASSIGNED", partnerEtaToStoreMinutes: null, deliveryPartnerAssignedAt: now, autoCancelDeadlineAt: null },
       $push: {
         statusHistory: { status: "DELIVERY_PARTNER_ASSIGNED", actorId: partner._id, actorRole: "DELIVERY_PARTNER", at: now },
         events: { event: "DELIVERY_PARTNER_ASSIGNED", eventType: "PARTNER_ASSIGNED", oldStatus: "READY_FOR_PICKUP", newStatus: "DELIVERY_PARTNER_ASSIGNED", actorType: "partner", actorId: partner._id, at: now },
@@ -294,7 +307,7 @@ export async function claimDelivery(orderId: string, partner: { _id: unknown; na
  */
 export async function unassignPartner(orderId: unknown, reason: string): Promise<void> {
   const order: any = await Order.findOneAndUpdate(
-    { _id: orderId, partnerId: { $ne: null }, status: { $nin: ["DELIVERED", "CANCELLED_BY_ADMIN", "CANCELLED_BY_CUSTOMER"] } },
+    { _id: orderId, partnerId: { $ne: null }, status: { $nin: ["DELIVERED", "CANCELLED_BY_ADMIN", "CANCELLED_BY_CUSTOMER", "AUTO_CANCELLED"] } },
     {
       $set: { partnerId: null, partnerName: null, status: "READY_FOR_PICKUP", deliveryOfferStatus: "NONE" },
       $push: { events: { event: "DELIVERY_PARTNER_UNASSIGNED", actorType: "system", metadata: { reason } } },

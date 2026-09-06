@@ -3,8 +3,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { usePricingStore } from "@/store/usePricingStore";
 import { StoreCartBill, StoreCartLineItem } from "@/types";
+import { userStorageKey } from "@/services/userKey";
 
-const STORAGE_KEY = "goocart.storecart.v1";
+// Base for the per-user store (Grocery/Vegetables/Mart) cart key. Resolved to a
+// user-scoped key at read/write time so two accounts never share a store cart.
+const STORAGE_BASE = "goocart.storecart.v1";
 
 // The store cart holds products from all three store services (Grocery,
 // Vegetables, Mart) together — they all belong to the GoCart Store and are
@@ -55,7 +58,7 @@ type StoreCartState = {
 };
 
 function persist(state: StoreCartState) {
-  void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ items: state.items, couponCode: state.couponCode, tip: state.tip }));
+  void AsyncStorage.setItem(userStorageKey(STORAGE_BASE), JSON.stringify({ items: state.items, couponCode: state.couponCode, tip: state.tip }));
 }
 
 export const useStoreCartStore = create<StoreCartState>((set, get) => ({
@@ -123,12 +126,12 @@ export const useStoreCartStore = create<StoreCartState>((set, get) => ({
   },
   clear: () => {
     set({ items: [], couponCode: null, tip: 0 });
-    void AsyncStorage.removeItem(STORAGE_KEY);
+    void AsyncStorage.removeItem(userStorageKey(STORAGE_BASE));
   },
 
   hydrate: async () => {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      const raw = await AsyncStorage.getItem(userStorageKey(STORAGE_BASE));
       if (!raw) return;
       const saved = JSON.parse(raw) as { items?: StoreCartLineItem[]; couponCode?: string | null; tip?: number };
       set({ items: saved.items ?? [], couponCode: saved.couponCode ?? null, tip: saved.tip ?? 0 });

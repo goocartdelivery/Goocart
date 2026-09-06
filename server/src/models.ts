@@ -349,6 +349,29 @@ const orderSchema = new Schema(
     deliveryOfferExpiresAt: { type: Date, default: null },
     deliveryOfferRadiusKm: { type: Number, default: null },
     deliveryOfferAttempts: { type: Number, default: 0 },
+
+    // --- Partner-search auto-cancellation & cancellation bookkeeping --------
+    // A customer must not be left waiting indefinitely for a delivery partner
+    // who never accepts (spec section 14). The 5-minute countdown starts the
+    // moment the platform begins searching for a partner (READY_FOR_PICKUP)
+    // and auto-cancels the order if no partner has been assigned by then.
+    autoCancelDeadlineAt: { type: Date, default: null },
+    autoCancellationAt: { type: Date, default: null },
+    // When the (first) partner was assigned — used to prove an order was
+    // successfully delivered/picked up before any 5-minute deadline elapsed.
+    deliveryPartnerAssignedAt: { type: Date, default: null },
+    // Why an order reached a cancelled terminal state (user-chosen, admin, or
+    // the auto-cancel reason). Mirrors the latest events[].metadata.reason.
+    cancellationReason: { type: String, default: null },
+    // Refund bookkeeping for prepaid orders that never reached delivery. There
+    // is no wallet/payment-gateway settlement in this codebase, so a refund is
+    // recorded as PENDING and surfaced to ops/admin for manual processing
+    // rather than auto-issued. COD orders record null (nothing to refund).
+    refund: {
+      amount: { type: Number, default: null },
+      status: { type: String, default: "NONE" }, // NONE | PENDING | PROCESSED | FAILED
+      at: { type: Date, default: null },
+    },
   },
   opts,
 );
@@ -556,6 +579,80 @@ const supportTicketSchema = new Schema(
   opts,
 );
 
+// --- Personalization (Recommendations) -------------------------------------
+// Backend memory for the "Recommended for You" engine. Search queries are
+// aggregated per user+category+normalized query so re-searching the same thing
+// never creates duplicate rows — it just bumps searchCount and lastSearchedAt
+// (spec input: "biryani" repeated 4x -> one row, searchCount 4). Behaviour
+// events are likewise aggregated per user+category+eventType+ref so a product
+// viewed/added/ordered many times is one row with a growing count. Only the
+// minimal signal needed for scoring is stored (no raw payloads), and the
+// recommendation endpoint never returns these rows to the client.
+
+const userSearchHistorySchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    // "food" | "grocery" | "vegetables" | "mart" — lowercased canonical category.
+    category: { type: String, required: true, index: true },
+    searchQuery: { type: String, required: true },
+    normalizedQuery: { type: String, required: true },
+    searchCount: { type: Number, required: true, default: 1 },
+    firstSearchedAt: { type: Date, required: true, default: Date.now },
+    lastSearchedAt: { type: Date, required: true, default: Date.now },
+  },
+  opts,
+);
+userSearchHistorySchema.index({ userId: 1, category: 1, normalizedQuery: 1 }, { unique: true });
+// For pruning very old history in one efficient operation.
+userSearchHistorySchema.index({ userId: 1, lastSearchedAt: -1 });
+
+const userBehaviorEventSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    category: { type: String, required: true, index: true },
+    eventType: { type: String, required: true, index: true }, // SEARCH | VIEW_* | ADD_TO_CART | REMOVE_FROM_CART | PURCHASE | FAVORITE
+    // Generic reference to the entity interacted with (productId for store
+    // items, foodItemId or restaurantId for food). Only one of these is set.
+    refType: { type: String, enum: ["product", "foodItem", "restaurant"], default: null },
+    refId: { type: String, default: null },
+    // For SEARCH events: the query that produced this behaviour. Stored on the
+    // event so searches that also led to an interaction reinforce the same
+    // preference tokens.
+    searchQuery: { type: String, default: null },
+    normalizedQuery: { type: String, default: null },
+    count: { type: Number, required: true, default: 0 },
+    lastAt: { type: Date, required: true, default: Date.now },
+  },
+  opts,
+);
+userBehaviorEventSchema.index({ userId: 1, category: 1, eventType: 1, refType: 1, refId: 1 }, { unique: true });
+userBehaviorEventSchema.index({ userId: 1, lastAt: -1 });
+
+// Singleton (_id: "recommendations") admin-editable knobs for the engine —
+// mirrors the PricingSettings pattern (admin can tune without a redeploy).
+const recSettingsSchema = new Schema(
+  {
+    _id: { type: String },
+    enabled: { type: Boolean, default: true },
+    count: { type: Number, required: true, min: 1, max: 50, default: 10 },
+    fallbackCount: { type: Number, required: true, min: 1, max: 20, default: 6 },
+    cacheSeconds: { type: Number, required: true, min: 0, max: 3600, default: 300 },
+    // Minimum total behaviour signal before personalised results replace the
+    // popularity fallback (0 = personalise as soon as any signal exists).
+    minSignal: { type: Number, required: true, min: 0, default: 1 },
+    // Relative weights for the scoring formula (conceptual only — not exposed).
+    weights: {
+      search: { type: Number, default: 1 },
+      view: { type: Number, default: 0.6 },
+      addToCart: { type: Number, default: 1.5 },
+      purchase: { type: Number, default: 2.5 },
+      favorite: { type: Number, default: 1.2 },
+      recencyHalfLifeDays: { type: Number, default: 14 },
+    },
+  },
+  { versionKey: false, timestamps: true },
+);
+
 export const Product = model("Product", productSchema);
 export const Banner = model("Banner", bannerSchema);
 export const Reservation = model("Reservation", reservationSchema);
@@ -580,10 +677,15 @@ export const DeviceToken = model("DeviceToken", deviceTokenSchema);
 export const Notification = model("Notification", notificationSchema);
 export const OrderRating = model("OrderRating", orderRatingSchema);
 export const SupportTicket = model("SupportTicket", supportTicketSchema);
+export const UserSearchHistory = model("UserSearchHistory", userSearchHistorySchema);
+export const UserBehaviorEvent = model("UserBehaviorEvent", userBehaviorEventSchema);
+export const RecSettings = model("RecSettings", recSettingsSchema);
 
 export type UserDoc = InferSchemaType<typeof userSchema> & { _id: mongoose.Types.ObjectId };
 export type RestaurantDoc = InferSchemaType<typeof restaurantSchema> & { _id: mongoose.Types.ObjectId };
 export type FoodItemDoc = InferSchemaType<typeof foodItemSchema> & { _id: mongoose.Types.ObjectId };
+export type UserSearchHistoryDoc = InferSchemaType<typeof userSearchHistorySchema> & { _id: mongoose.Types.ObjectId };
+export type UserBehaviorEventDoc = InferSchemaType<typeof userBehaviorEventSchema> & { _id: mongoose.Types.ObjectId };
 export type OrderDoc = InferSchemaType<typeof orderSchema> & { _id: mongoose.Types.ObjectId };
 
 /** Atomic, gap-free order numbering — the Mongo equivalent of an AUTOINCREMENT. */

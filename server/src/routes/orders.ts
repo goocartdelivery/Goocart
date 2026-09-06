@@ -6,7 +6,7 @@ import { canTransition, generateOrderNumber, generateOtp, TERMINAL_STATUSES, typ
 import { canAdmin, canPartner, canVendor, hasVendorPermission, requireAuth, type AuthedRequest } from "../lib/auth.js";
 import { ok, fail } from "../lib/http.js";
 import { claimDelivery, broadcastDeliveryOffer, unassignPartner, clearOrderTimers } from "../lib/delivery.js";
-import { emitOrderUpdate } from "../lib/realtime.js";
+import { emitOrderUpdate, emitToPartner } from "../lib/realtime.js";
 import { notifyUser, notifyUsers } from "../lib/push.js";
 import { getAutomationSettings } from "../lib/automationSettings.js";
 
@@ -38,7 +38,7 @@ async function resolveVendorAutomation(restaurant: any): Promise<{ mode: "MANUAL
 
   const activeCount = await Order.countDocuments({
     restaurantId: restaurant._id,
-    status: { $nin: ["DELIVERED", "VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN"] },
+    status: { $nin: ["DELIVERED", "VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED"] },
   });
   const maxActive = Number(restaurant.maxSimultaneousOrders ?? settings.vendor.defaultMaxSimultaneousOrders);
   const maxQueue = Number(restaurant.maximumQueue ?? settings.vendor.defaultMaximumQueue);
@@ -462,12 +462,27 @@ ordersRouter.post("/:id/cancel", requireAuth, async (req: AuthedRequest, res) =>
       return res.status(409).json(fail("CANNOT_CANCEL", "This order can no longer be cancelled."));
     }
 
+    // A customer may cancel while the platform is still searching for a
+    // delivery partner (READY_FOR_PICKUP), but only before a partner has
+    // actually claimed the job — once assigned the order is in-flight.
+    if (group === "customer" && from === "READY_FOR_PICKUP" && order.partnerId) {
+      return res.status(409).json(fail("CANNOT_CANCEL", "A delivery partner has been assigned to this order."));
+    }
+
     const now = new Date();
     const previousPartnerId = order.partnerId;
+    const reinstatedRefund =
+      order.paymentStatus === "PAID" && (order.refund?.status ?? "NONE") === "NONE" ? { amount: order.bill?.total ?? 0, status: "PENDING" as const, at: now } : order.refund ?? null;
     const updated = await Order.findOneAndUpdate(
       { _id: order._id, status: from },
       {
-        $set: { status: to },
+        $set: {
+          status: to,
+          ...(reinstatedRefund ? { refund: reinstatedRefund } : {}),
+          ...(order.partnerId ? { deliveryOfferStatus: "EXPIRED" } : {}),
+          cancellationReason: req.body?.reason ?? null,
+          ...(group === "customer" && from === "READY_FOR_PICKUP" ? { autoCancelDeadlineAt: null } : {}),
+        },
         $push: {
           statusHistory: { status: to, actorId: user._id, actorRole: user.role, at: now },
           events: { event: to, actorType: group, actorId: user._id, at: now, metadata: { reason: req.body?.reason ?? null } },
@@ -480,7 +495,14 @@ ordersRouter.post("/:id/cancel", requireAuth, async (req: AuthedRequest, res) =>
     clearOrderTimers(updated._id);
     if (previousPartnerId) await User.updateOne({ _id: previousPartnerId }, { $set: { partnerBusy: false } });
 
-    await AuditLog.create({ actorId: user._id, actorRole: user.role, action: "order.cancel", entityType: "order", entityId: String(order._id), before: { status: from }, after: { status: to } });
+    // If the order was still being offered to partners, close the live offers
+    // so nobody tries to claim a cancelled job.
+    for (const offeredId of updated.deliveryOfferedPartnerIds ?? []) {
+      if (String(offeredId) === String(previousPartnerId)) continue;
+      emitToPartner(offeredId, "delivery:offer_closed", { orderId: String(updated._id), reason: "CANCELLED" });
+    }
+
+    await AuditLog.create({ actorId: user._id, actorRole: user.role, action: "order.cancel", entityType: "order", entityId: String(order._id), before: { status: from }, after: { status: to, reason: updated.cancellationReason } });
 
     emitOrderUpdate(updated, "order:update", { orderId: String(updated._id), status: to });
     void notifyUser(updated.customerId, "Order cancelled", `Order ${updated.orderNumber} was cancelled.`, { type: "ORDER_CANCELLED", orderId: String(updated._id) }, "ORDER");
@@ -599,6 +621,13 @@ export function toOrderDTO(o: any, viewer: any) {
     manualAcceptanceRequired: o.manualAcceptanceRequired ?? true,
     autoAccepted: Boolean(o.autoAccepted),
     deliveryOfferStatus: o.deliveryOfferStatus ?? "NONE",
+    autoCancelDeadlineAt: o.autoCancelDeadlineAt ?? null,
+    deliveryPartnerAssignedAt: o.deliveryPartnerAssignedAt ?? null,
+    autoCancellationAt: o.autoCancellationAt ?? null,
+    cancellationReason: o.cancellationReason ?? null,
+    refund: o.refund
+      ? { amount: o.refund.amount ?? null, status: o.refund.status ?? "NONE", at: o.refund.at ?? null }
+      : null,
     paymentMethod: o.paymentMethod,
     paymentStatus: o.paymentStatus,
     couponCode: o.couponCode,

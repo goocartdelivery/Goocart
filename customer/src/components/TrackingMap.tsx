@@ -7,6 +7,8 @@ type Props = {
   restaurant: { latitude: number; longitude: number; name: string };
   destination: { latitude: number; longitude: number };
   rider?: { latitude: number; longitude: number; name: string } | null;
+  // Optional external height (defaults to 220).
+  height?: number;
 };
 
 // Native implementation (Android/iOS via Expo Go). react-native-maps has no
@@ -17,9 +19,9 @@ type Props = {
 // realtime channel from the delivery partner's device (see
 // server/src/routes/partner.ts POST /location and useOrderTracking.ts on the
 // customer side) — nothing here interpolates or simulates movement.
-export function TrackingMap({ restaurant, destination, rider }: Props) {
+export function TrackingMap({ restaurant, destination, rider, height = 220 }: Props) {
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { height }]}>
       <MapView
         style={styles.map}
         provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}

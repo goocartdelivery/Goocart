@@ -81,12 +81,14 @@ export function StoreCartSection({ items, bill, onInc, onDec, onRemove, onClear,
 
       <View style={styles.bill}>
         <Row label="Item Total" value={bill.itemTotal} />
+        {bill.couponDiscount > 0 ? <Row label="Discount" value={bill.couponDiscount} highlight /> : null}
         <Row label="Delivery Fee" value={bill.deliveryFee} />
         <Row label="Platform Fee" value={bill.platformFee} />
         <Row label="Taxes" value={bill.taxes} />
         {bill.tip > 0 ? <Row label="Tip" value={bill.tip} /> : null}
         <View style={styles.thinDivider} />
         <Row label="To Pay" value={bill.total} strong />
+        {bill.couponDiscount > 0 ? <Text style={styles.saved}>You saved ₹{bill.couponDiscount} on this order</Text> : null}
       </View>
 
       <Pressable accessibilityRole="button" onPress={onCheckout} style={({ pressed }) => [styles.checkoutBtn, pressed && styles.pressed]}>
@@ -96,11 +98,11 @@ export function StoreCartSection({ items, bill, onInc, onDec, onRemove, onClear,
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+function Row({ label, value, strong, highlight }: { label: string; value: number; strong?: boolean; highlight?: boolean }) {
   return (
     <View style={styles.row}>
       <Text style={strong ? typography.bodyStrong : typography.body}>{label}</Text>
-      <Text style={strong ? typography.bodyStrong : typography.body}>₹{value}</Text>
+      <Text style={[strong ? typography.bodyStrong : typography.body, highlight && { color: colors.success }]}>₹{value}</Text>
     </View>
   );
 }
@@ -116,7 +118,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   titleWrap: { flex: 1 },
-  eyebrow: { ...typography.eyebrow, fontSize: 10 },
+  eyebrow: { ...typography.eyebrow, fontSize: 10, color: colors.success },
   title: { ...typography.h2, marginTop: 2 },
   clearBtn: {
     width: 30,
@@ -162,7 +164,7 @@ const styles = StyleSheet.create({
   bill: { gap: spacing.sm },
   thinDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: spacing.xs },
   checkoutBtn: {
-    backgroundColor: colors.dark,
+    backgroundColor: colors.success,
     borderRadius: radius.md,
     height: 50,
     alignItems: "center",
@@ -171,4 +173,5 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.9 },
   checkoutText: { ...typography.button, fontSize: 14 },
+  saved: { ...typography.caption, color: colors.success, fontWeight: "600", textAlign: "right" },
 });

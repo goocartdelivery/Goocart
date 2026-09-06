@@ -15,6 +15,7 @@ export const ORDER_STATUS_LABEL: Partial<Record<FoodOrderStatus, string>> = {
   VENDOR_REJECTED: "Rejected by restaurant",
   CANCELLED_BY_CUSTOMER: "Cancelled by you",
   CANCELLED_BY_ADMIN: "Cancelled by Goocart",
+  AUTO_CANCELLED: "Cancelled — no partner available",
 };
 
 export const ORDER_STATUS_SEQUENCE: FoodOrderStatus[] = [...ORDER_STATUSES];

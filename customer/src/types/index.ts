@@ -203,6 +203,20 @@ export type Banner = {
 
 // --- Pricing ----------------------------------------------------------
 
+export type CouponEligibility = {
+  eligible: boolean;
+  reason: "NONE" | "MIN_NOT_REACHED" | "NOT_APPLICABLE" | "NO_ITEMS";
+  // How much more eligible-subtotal is needed before the coupon becomes
+  // eligible (0 when already eligible). Mirrors the discountBase used by the
+  // bill so the UI's "Eligible/Not Eligible / add ₹X more" always matches it.
+  shortfall: number;
+  // The base the coupon discount is computed on — the same value the bill
+  // uses (eligible subtotal capped by what remains after the restaurant
+  // discount). Keeping this in one place is what stops the offer card and the
+  // bill from disagreeing.
+  discountBase: number;
+};
+
 export type BillBreakdown = {
   itemTotal: number;
   restaurantDiscount: number;
@@ -212,6 +226,11 @@ export type BillBreakdown = {
   taxes: number;
   tip: number;
   total: number;
+  // Coupon state joined to the same pricing pass, so eligibility display,
+  // the free-delivery bar and the bill can never disagree again.
+  couponEligibility: CouponEligibility | null;
+  freeDeliveryApplied: boolean;
+  couponBenefitsDelivery: boolean;
 };
 
 // --- Orders -------------------------------------------------------------
@@ -231,7 +250,7 @@ export const ORDER_STATUSES = [
 ] as const;
 // Terminal states an order can also end in. They are not part of the forward
 // progress timeline, so they live outside ORDER_STATUSES.
-export const TERMINAL_ORDER_STATUSES = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN"] as const;
+export const TERMINAL_ORDER_STATUSES = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED"] as const;
 export type FoodOrderStatus = (typeof ORDER_STATUSES)[number] | (typeof TERMINAL_ORDER_STATUSES)[number];
 
 export type OrderStatusEvent = {
@@ -277,6 +296,15 @@ export type FoodOrder = {
   deliveryOtp: string | null;
   restaurantLatitude: number;
   restaurantLongitude: number;
+  // Delivery-dispatch metadata: whether offers are out (OFFERING), when the
+  // partner search must conclude by, and when a partner was assigned. Used by
+  // the "Finding a delivery partner..." countdown and cancellation rules.
+  deliveryOfferStatus?: "NONE" | "OFFERING" | "ASSIGNED" | "EXPIRED";
+  autoCancelDeadlineAt?: string | null;
+  deliveryPartnerAssignedAt?: string | null;
+  autoCancellationAt?: string | null;
+  cancellationReason?: string | null;
+  refund?: { amount: number | null; status: "NONE" | "PENDING" | "PROCESSED" | "FAILED"; at: string | null } | null;
 };
 
 // --- Support & ratings ----------------------------------------------------
@@ -309,4 +337,36 @@ export type OrderRating = {
   deliveryPartnerStars: number;
   comment?: string;
   createdAt: string;
+};
+
+// --- Recommendations --------------------------------------------------------
+// Shape mirrors GET /api/v1/customer/recommendations. The DTO is deliberately
+// flat so a single card component can render both food and store items.
+
+export type RecCategory = "food" | "grocery" | "vegetables" | "mart";
+
+export type RecommendationItem = {
+  id: string;
+  category: RecCategory;
+  name: string;
+  description?: string;
+  imageUrl: string | null;
+  price: number;
+  originalPrice: number | null;
+  discountPercent: number;
+  rating: number | null;
+  veg?: boolean | null;
+  restaurantId?: string;
+  restaurantName?: string;
+  service?: string;
+  vendorName?: string;
+  eta?: string;
+  reason: string;
+};
+
+export type RecommendationsResponse = {
+  category: RecCategory;
+  personalized: boolean;
+  basedOn: string[];
+  items: RecommendationItem[];
 };

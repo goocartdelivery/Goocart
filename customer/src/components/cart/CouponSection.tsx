@@ -12,19 +12,27 @@ type Props = {
   appliedCode: string | null;
   inputValue: string;
   error: string | null;
+  notice?: string | null;
   suggestions: CouponSuggestion[];
+  savings: number;
   onInputChange: (v: string) => void;
   onApply: () => void;
   onRemove: () => void;
   onApplySuggestion: (code: string) => void;
+  onViewAll: () => void;
 };
 
-export function CouponSection({ appliedCode, inputValue, error, suggestions, onInputChange, onApply, onRemove, onApplySuggestion }: Props) {
+export function CouponSection({ appliedCode, inputValue, error, notice, suggestions, savings, onInputChange, onApply, onRemove, onApplySuggestion, onViewAll }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.sectionHeader}>
-        <Text style={typography.h3}>Coupon</Text>
-        <Icon name="offer" size={18} color={colors.primary} />
+        <View style={styles.sectionTitleWrap}>
+          <Text style={typography.h3}>Apply Offers</Text>
+          <Icon name="offer" size={18} color={colors.primary} />
+        </View>
+        <Pressable onPress={onViewAll} hitSlop={8}>
+          <Text style={styles.viewAll}>View All</Text>
+        </Pressable>
       </View>
 
       {appliedCode ? (
@@ -34,8 +42,10 @@ export function CouponSection({ appliedCode, inputValue, error, suggestions, onI
               <Icon name="checkCircle" size={16} color={colors.white} />
             </View>
             <View>
-              <Text style={styles.appliedTitle}>{appliedCode} applied</Text>
-              <Text style={styles.appliedSub}>Great pick — discount added below</Text>
+              <Text style={styles.appliedTitle}>{appliedCode.toUpperCase()} applied</Text>
+              <Text style={styles.appliedSub}>
+                {savings > 0 ? `You saved ₹${savings}` : "Offer applied to this order"}
+              </Text>
             </View>
           </View>
           <Pressable onPress={onRemove} style={styles.removeBtn} hitSlop={8}>
@@ -66,12 +76,18 @@ export function CouponSection({ appliedCode, inputValue, error, suggestions, onI
               <Text style={styles.error}>{error}</Text>
             </View>
           ) : null}
+          {!error && notice ? (
+            <View style={styles.noticeRow}>
+              <Icon name="alert" size={14} color={colors.warning} />
+              <Text style={styles.notice}>{notice}</Text>
+            </View>
+          ) : null}
         </View>
       )}
 
       {suggestions.length > 0 ? (
         <View style={styles.suggestions}>
-          <Text style={styles.suggestionsLabel}>Best offers</Text>
+          <Text style={styles.suggestionsLabel}>Available offers</Text>
           {suggestions.map((s) => (
             <Pressable
               key={s.code}
@@ -90,7 +106,7 @@ export function CouponSection({ appliedCode, inputValue, error, suggestions, onI
                 </Text>
               </View>
               <Text style={[styles.suggestionAction, s.available ? styles.suggestionActionActive : styles.suggestionActionLocked]}>
-                {s.available ? "APPLY" : "Ineligible"}
+                {s.available ? "Eligible" : "Not Eligible"}
               </Text>
             </Pressable>
           ))}
@@ -110,6 +126,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sectionTitleWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  viewAll: { ...typography.captionStrong, color: colors.primary },
   applied: {
     flexDirection: "row",
     alignItems: "center",
@@ -157,6 +175,8 @@ const styles = StyleSheet.create({
   applyText: { color: colors.primary, fontWeight: "800", fontSize: 14 },
   errorRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   error: { ...typography.caption, color: colors.error, flex: 1 },
+  noticeRow: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.warningMuted, borderRadius: radius.md, padding: spacing.sm },
+  notice: { ...typography.caption, color: colors.warning, flex: 1 },
   suggestions: { gap: spacing.sm, marginTop: spacing.xs },
   suggestionsLabel: { ...typography.captionStrong, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
   suggestion: {

@@ -11,9 +11,12 @@ export const ORDER_STATUSES = [
   "ARRIVED",
   "DELIVERED",
 ] as const;
-export type OrderStatus = (typeof ORDER_STATUSES)[number] | "VENDOR_REJECTED" | "CANCELLED_BY_CUSTOMER" | "CANCELLED_BY_ADMIN";
+export type OrderStatus = (typeof ORDER_STATUSES)[number] | "VENDOR_REJECTED" | "CANCELLED_BY_CUSTOMER" | "CANCELLED_BY_ADMIN" | "AUTO_CANCELLED";
 
-export const TERMINAL_STATUSES: OrderStatus[] = ["DELIVERED", "VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN"];
+export const TERMINAL_STATUSES: OrderStatus[] = ["DELIVERED", "VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED"];
+
+/** Statuses that represent the terminal, non-delivered "failed" end states. */
+export const CANCELLED_STATUSES: OrderStatus[] = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED"];
 
 // Statuses during which a delivery partner has an active job and should be
 // pushing GPS updates (spec section 32).
@@ -46,6 +49,11 @@ const TRANSITIONS: Record<string, Partial<Record<OrderStatus, OrderStatus[]>>> =
   customer: {
     PLACED: ["CANCELLED_BY_CUSTOMER"],
     VENDOR_ACCEPTED: ["CANCELLED_BY_CUSTOMER"],
+    PREPARING: ["CANCELLED_BY_CUSTOMER"],
+    // READY_FOR_PICKUP means the customer is waiting for a delivery partner.
+    // They may still cancel while no partner has claimed the job yet — the
+    // "partnerId is null" guard is enforced in the cancel route.
+    READY_FOR_PICKUP: ["CANCELLED_BY_CUSTOMER"],
   },
   admin: {
     PLACED: ["CANCELLED_BY_ADMIN", "VENDOR_ACCEPTED"],

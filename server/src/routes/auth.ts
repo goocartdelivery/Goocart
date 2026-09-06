@@ -16,7 +16,7 @@ import {
   requireAuth,
   type AuthedRequest,
 } from "../lib/auth.js";
-import { ok, fail, EMAIL_RE, PHONE_RE } from "../lib/http.js";
+import { ok, fail, EMAIL_RE, PHONE_RE, normalizePhoneNumber } from "../lib/http.js";
 
 export const authRouter = Router();
 
@@ -52,15 +52,16 @@ async function handleSignup(req: Request, res: Response) {
     const username = String(req.body?.username ?? "").trim().toLowerCase();
     const password = String(req.body?.password ?? "");
     const name = String(req.body?.name ?? "").trim();
-    // Optional here — the Customer app's own signup form requires it and
-    // validates before ever calling this route, but the admin web portal's
-    // signup (app/page.tsx, same route) has never collected a phone number,
-    // and must keep working unchanged.
-    const phone = req.body?.phone !== undefined ? String(req.body.phone).trim() : undefined;
+
+    let phone: string | undefined = undefined;
+    if (req.body?.phone !== undefined && String(req.body.phone).trim() !== "") {
+      const norm = normalizePhoneNumber(String(req.body.phone));
+      if (!norm.valid) return res.status(400).json(fail("INVALID_PHONE", norm.error));
+      phone = norm.normalized;
+    }
 
     if (!EMAIL_RE.test(email)) return res.status(400).json(fail("INVALID_EMAIL", "Enter a valid email address"));
     if (username && !USERNAME_RE.test(username)) return res.status(400).json(fail("INVALID_USERNAME", "Use 3–30 lowercase letters, numbers, dots or underscores for username"));
-    if (phone && !PHONE_RE.test(phone)) return res.status(400).json(fail("INVALID_PHONE", "Enter a valid mobile number"));
     if (password.length < 8) return res.status(400).json(fail("WEAK_PASSWORD", "Password must be at least 8 characters"));
     if (name.length < 2) return res.status(400).json(fail("INVALID_NAME", "Enter your full name"));
     if (await User.exists({ email })) return res.status(409).json(fail("EMAIL_TAKEN", "An account with this email already exists"));
@@ -78,8 +79,14 @@ async function handleSignup(req: Request, res: Response) {
 
 async function handleLogin(req: Request, res: Response) {
   try {
-    const identifier = String(req.body?.identifier ?? req.body?.email ?? "").trim().toLowerCase();
+    let identifier = String(req.body?.identifier ?? req.body?.email ?? "").trim().toLowerCase();
     const password = String(req.body?.password ?? "");
+
+    if (!EMAIL_RE.test(identifier) && !USERNAME_RE.test(identifier)) {
+      const norm = normalizePhoneNumber(identifier);
+      if (norm.valid) identifier = norm.normalized;
+    }
+
     const isIdentifier = EMAIL_RE.test(identifier) || PHONE_RE.test(identifier) || USERNAME_RE.test(identifier);
     if (!isIdentifier || !password) return res.status(400).json(fail("INVALID_CREDENTIALS", "Enter your email, phone or username and password"));
 
@@ -109,14 +116,18 @@ authRouter.post("/login", authAttemptLimiter, handleLogin);
 
 authRouter.post("/otp/request", otpRequestLimiter, async (req, res) => {
   try {
-    const identifier = String(req.body?.identifier ?? "").trim().toLowerCase();
+    let identifier = String(req.body?.identifier ?? "").trim().toLowerCase();
     const purpose = String(req.body?.purpose ?? "");
     if (purpose !== "SIGNUP" && purpose !== "LOGIN") return res.status(400).json(fail("INVALID_PURPOSE", "Invalid OTP purpose"));
-    if (!EMAIL_RE.test(identifier) && !PHONE_RE.test(identifier)) {
-      return res.status(400).json(fail("INVALID_IDENTIFIER", "Enter a valid email or phone number"));
+
+    const isEmail = EMAIL_RE.test(identifier);
+    if (!isEmail) {
+      const norm = normalizePhoneNumber(identifier);
+      if (!norm.valid) return res.status(400).json(fail("INVALID_IDENTIFIER", norm.error));
+      identifier = norm.normalized;
     }
 
-    const field = EMAIL_RE.test(identifier) ? "email" : "phone";
+    const field = isEmail ? "email" : "phone";
     const existing = await User.findOne({ [field]: identifier }).lean();
     if (purpose === "SIGNUP" && existing) return res.status(409).json(fail("ACCOUNT_EXISTS", "An account already exists — sign in instead"));
     if (purpose === "LOGIN" && !existing) return res.status(404).json(fail("ACCOUNT_NOT_FOUND", "No account found — sign up instead"));
@@ -139,15 +150,20 @@ authRouter.post("/otp/request", otpRequestLimiter, async (req, res) => {
 
 authRouter.post("/otp/verify", otpVerifyLimiter, async (req, res) => {
   try {
-    const identifier = String(req.body?.identifier ?? "").trim().toLowerCase();
+    let identifier = String(req.body?.identifier ?? "").trim().toLowerCase();
     const purpose = String(req.body?.purpose ?? "");
     const code = String(req.body?.code ?? "").trim();
     const name = String(req.body?.name ?? "").trim();
 
+    const isEmail = EMAIL_RE.test(identifier);
+    if (!isEmail) {
+      const norm = normalizePhoneNumber(identifier);
+      if (norm.valid) identifier = norm.normalized;
+    }
+
     if (!/^[0-9]{6}$/.test(code)) return res.status(400).json(fail("INVALID_CODE", "Enter the 6-digit code"));
     if (!(await consumeOtp(identifier, purpose, code))) return res.status(401).json(fail("INVALID_OTP", "That code is incorrect or has expired"));
 
-    const isEmail = EMAIL_RE.test(identifier);
     const field = isEmail ? "email" : "phone";
     let user: any = await User.findOne({ [field]: identifier });
 
@@ -186,12 +202,18 @@ authRouter.post("/otp/verify", otpVerifyLimiter, async (req, res) => {
 
 authRouter.post("/password/reset-request", passwordResetLimiter, async (req, res) => {
   try {
-    const identifier = String(req.body?.identifier ?? "").trim().toLowerCase();
-    if (!EMAIL_RE.test(identifier) && !PHONE_RE.test(identifier)) {
+    let identifier = String(req.body?.identifier ?? "").trim().toLowerCase();
+    const isEmail = EMAIL_RE.test(identifier);
+    if (!isEmail) {
+      const norm = normalizePhoneNumber(identifier);
+      if (norm.valid) identifier = norm.normalized;
+    }
+
+    if (!isEmail && !PHONE_RE.test(identifier)) {
       return res.status(400).json(fail("INVALID_IDENTIFIER", "Enter a valid email or phone number"));
     }
 
-    const field = EMAIL_RE.test(identifier) ? "email" : "phone";
+    const field = isEmail ? "email" : "phone";
     const existing: any = await User.findOne({ [field]: identifier }).lean();
     // Same response whether or not the account exists (and whether it's
     // active) so this endpoint can't be used to enumerate registered
@@ -208,15 +230,21 @@ authRouter.post("/password/reset-request", passwordResetLimiter, async (req, res
 
 authRouter.post("/password/reset-confirm", passwordResetLimiter, async (req, res) => {
   try {
-    const identifier = String(req.body?.identifier ?? "").trim().toLowerCase();
+    let identifier = String(req.body?.identifier ?? "").trim().toLowerCase();
     const code = String(req.body?.code ?? "").trim();
     const newPassword = String(req.body?.newPassword ?? "");
+
+    const isEmail = EMAIL_RE.test(identifier);
+    if (!isEmail) {
+      const norm = normalizePhoneNumber(identifier);
+      if (norm.valid) identifier = norm.normalized;
+    }
 
     if (!/^[0-9]{6}$/.test(code)) return res.status(400).json(fail("INVALID_CODE", "Enter the 6-digit code"));
     if (newPassword.length < 8) return res.status(400).json(fail("WEAK_PASSWORD", "Password must be at least 8 characters"));
     if (!(await consumeOtp(identifier, "PASSWORD_RESET", code))) return res.status(401).json(fail("INVALID_OTP", "That code is incorrect or has expired"));
 
-    const field = EMAIL_RE.test(identifier) ? "email" : "phone";
+    const field = isEmail ? "email" : "phone";
     const user: any = await User.findOne({ [field]: identifier });
     if (!user) return res.status(404).json(fail("ACCOUNT_NOT_FOUND", "No account found for this identifier"));
     if (user.status !== "ACTIVE") return res.status(403).json(fail("ACCOUNT_DISABLED", "This account is not active"));
@@ -233,6 +261,7 @@ authRouter.post("/password/reset-confirm", passwordResetLimiter, async (req, res
     res.status(500).json(fail("PASSWORD_RESET_FAILED", e instanceof Error ? e.message : "Could not reset your password"));
   }
 });
+
 
 // The mobile client uses a single token endpoint with a `mode` discriminator
 // rather than separate /signup and /login paths. Kept as a thin adapter so the

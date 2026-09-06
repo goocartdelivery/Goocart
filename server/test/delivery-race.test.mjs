@@ -21,6 +21,7 @@ test("concurrent delivery acceptance is atomic: exactly one partner wins", async
     import("../dist/models.js"),
   ]);
   await connectDb();
+  await Order.init();
 
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
@@ -115,10 +116,11 @@ test("concurrent delivery acceptance is atomic: exactly one partner wins", async
   let order;
   for (let i = 0; i < 40; i += 1) {
     const res = await request(`/api/v1/orders/${orderId}`, { token: partners[0].token });
-    order = res.json.data.order;
-    if (order.deliveryOfferStatus === "OFFERING") break;
+    order = res.json?.data?.order;
+    if (order?.deliveryOfferStatus === "OFFERING") break;
     await new Promise((r) => setTimeout(r, 50));
   }
+
   assert.equal(order.deliveryOfferStatus, "OFFERING");
 
   // Fire all three "Accept" requests genuinely concurrently.

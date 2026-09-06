@@ -11,12 +11,15 @@ import { OffersSection } from "@/components/home/OffersSection";
 import { StoresSection } from "@/components/home/StoresSection";
 import { ProductSection } from "@/components/home/ProductSection";
 import { JobBookingCard } from "@/components/home/JobBookingCard";
+import { GroceryHomeSections } from "@/components/home/GroceryHomeSections";
 import { RecentTripsSection } from "@/components/home/RecentTripsSection";
 import { RestaurantCard } from "@/components/RestaurantCard";
 import { RestaurantCardSkeleton } from "@/components/SkeletonBlock";
 import { Icon } from "@/components/Icon";
 import { SectionHeader } from "@/components/SectionHeader";
+import { RecommendedSection } from "@/components/RecommendedSection";
 import { restaurantService } from "@/services/RestaurantService";
+import { serviceToRecCategory } from "@/services/RecommendationService";
 import { HomeCategory, serviceConfig } from "@/constants/serviceHome";
 import { colors, radius, spacing, typography } from "@/theme";
 import { useActiveServiceStore } from "@/store/useActiveServiceStore";
@@ -221,6 +224,10 @@ function FoodContent({
 
   return (
     <>
+      <View style={styles.section}>
+        <RecommendedSection category="food" />
+      </View>
+
       <View style={styles.popularSection}>
         <View style={styles.sectionHeaderRow}>
           <Text style={typography.h2}>Popular Near You</Text>
@@ -310,8 +317,16 @@ function ProductContent({
     if (refreshTick > 0) void useServiceHomeStore.getState().loadProducts(config.type, true);
   }, [refreshTick, config.type]);
 
+  if (config.type === "GROCERY") {
+    return <GroceryHomeSections selectedCategory={selectedCategory} />;
+  }
+
   return (
     <>
+      <View style={styles.section}>
+        <RecommendedSection category={serviceToRecCategory(config.type)} />
+      </View>
+
       {products.length > 0 ? (
         <View style={styles.section}>
           <SectionHeader title={`Popular ${config.tabLabel} stores`} subtitle="Live stock from vendors near you" />

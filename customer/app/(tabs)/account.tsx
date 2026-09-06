@@ -54,7 +54,7 @@ export default function AccountScreen() {
           <Text style={typography.h1}>{user?.name ?? "Browsing as guest"}</Text>
           <Text style={styles.copy}>{user ? (user.isDemo ? "Demo account" : user.phone ? `+91 ${user.phone}` : user.email) : "Sign in to place orders and track deliveries"}</Text>
           {!user ? (
-            <Pressable onPress={() => router.push({ pathname: "/login", params: { returnTo: "/(tabs)/account" } })} style={styles.signInButton}>
+            <Pressable onPress={() => router.push({ pathname: "/login", params: { returnTo: "/(tabs)/home" } })} style={styles.signInButton}>
               <Text style={styles.signInButtonText}>Sign in</Text>
             </Pressable>
           ) : null}

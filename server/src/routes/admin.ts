@@ -11,6 +11,7 @@ import { emitToAdmin } from "../lib/realtime.js";
 import { notifyUser } from "../lib/push.js";
 import { unassignPartner } from "../lib/delivery.js";
 import { getPricingSettings, updatePricingSettings } from "../lib/pricingSettings.js";
+import { getRecSettings, updateRecSettings } from "../lib/recommendations.js";
 import { getAutomationSettings, updateAutomationSettings } from "../lib/automationSettings.js";
 import { createFoodItem, updateFoodItem, MenuItemError } from "../lib/menuItems.js";
 import { EMAIL_RE, PHONE_RE, escapeRegex } from "../lib/http.js";
@@ -46,7 +47,7 @@ adminRouter.get("/customers", async (req, res) => {
           _id: "$customerId",
           orders: { $sum: 1 },
           completed: { $sum: { $cond: [{ $eq: ["$status", "DELIVERED"] }, 1, 0] } },
-          cancelled: { $sum: { $cond: [{ $in: ["$status", ["CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN"]] }, 1, 0] } },
+          cancelled: { $sum: { $cond: [{ $in: ["$status", ["CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED"]] }, 1, 0] } },
           totalSpend: { $sum: { $cond: [{ $eq: ["$status", "DELIVERED"] }, "$bill.total", 0] } },
           lastOrderAt: { $max: "$createdAt" },
         },
@@ -926,7 +927,7 @@ adminRouter.get("/finance", async (_req, res) => {
     ]);
 
     const successful = new Set(["DELIVERED", "COMPLETED"]);
-    const cancelled = new Set(["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "CANCELLED"]);
+    const cancelled = new Set(["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED", "CANCELLED"]);
     const rows: any[] = [];
     let legacyEstimatedOrders = 0;
 
@@ -1029,8 +1030,52 @@ adminRouter.patch("/pricing-settings", async (req: AuthedRequest, res) => {
   }
 });
 
-// --- Automation control center foundation ---------------------------------
+// --- Recommendation engine settings ----------------------------------------
+// Admin-editable knobs for the personalization engine (counts, cache TTL,
+// min-signal threshold and the scoring weights). Mirrors the pricing-settings
+// pattern so the engine can be tuned without a redeploy.
 
+adminRouter.get("/recommendations-settings", async (_req, res) => {
+  try {
+    res.json(ok({ recommendations: await getRecSettings() }));
+  } catch (e) {
+    res.status(500).json(fail("REC_UNAVAILABLE", e instanceof Error ? e.message : "Unable to load recommendation settings"));
+  }
+});
+
+adminRouter.patch("/recommendations-settings", async (req: AuthedRequest, res) => {
+  try {
+    const body = req.body ?? {};
+    const patch: Record<string, unknown> = {};
+    const num = (field: string, min: number, max: number) => {
+      if (body[field] === undefined) return;
+      const value = Number(body[field]);
+      if (!Number.isFinite(value) || value < min || value > max) throw new Error(`${field} must be a number between ${min} and ${max}.`);
+      patch[field] = value;
+    };
+    if (body.enabled !== undefined) patch.enabled = Boolean(body.enabled);
+    num("count", 1, 50);
+    num("fallbackCount", 1, 20);
+    num("cacheSeconds", 0, 3600);
+    num("minSignal", 0, 100000);
+    if (body.weights && typeof body.weights === "object") {
+      const w: Record<string, unknown> = {};
+      for (const key of ["search", "view", "addToCart", "purchase", "favorite"]) {
+        if ((body.weights as Record<string, unknown>)[key] !== undefined) w[key] = Number((body.weights as Record<string, unknown>)[key]);
+      }
+      if ((body.weights as Record<string, unknown>).recencyHalfLifeDays !== undefined) w.recencyHalfLifeDays = Number((body.weights as Record<string, unknown>).recencyHalfLifeDays);
+      if (Object.keys(w).length) patch.weights = w;
+    }
+    const before = await getRecSettings();
+    const recommendations = await updateRecSettings(patch);
+    await audit(req, "recommendations.update", "recommendations_settings", "recommendations", before, recommendations);
+    res.json(ok({ recommendations }, "Recommendation settings updated"));
+  } catch (e) {
+    res.status(400).json(fail("REC_UPDATE_FAILED", e instanceof Error ? e.message : "Could not update recommendation settings"));
+  }
+});
+
+// --- Automation control center foundation ---------------------------------
 adminRouter.get("/automation/settings", async (_req, res) => {
   try {
     const automation = await getAutomationSettings();

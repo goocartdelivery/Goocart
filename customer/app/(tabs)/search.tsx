@@ -8,6 +8,7 @@ import { VegBadge } from "@/components/VegBadge";
 import { RemoteImage } from "@/components/RemoteImage";
 import { colors, radius, spacing, typography } from "@/theme";
 import { restaurantService } from "@/services/RestaurantService";
+import { trackBehavior, trackSearch, serviceToRecCategory } from "@/services/RecommendationService";
 import { serviceConfig } from "@/constants/serviceHome";
 import { filterSearchByCategory } from "@/utils/foodFilter";
 import { ServiceType } from "@/types";
@@ -35,12 +36,15 @@ export default function SearchScreen() {
       restaurantService.searchFood(query).then((r) => {
         if (!cancelled) setResults(filterSearchByCategory(r, selectedCategory));
       });
+      // Feed the personalization engine so "Recommended for You" reflects the
+      // query (fire-and-forget; search must never block the UI).
+      trackSearch(serviceToRecCategory(service ?? "FOOD"), query);
     }, 200);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, selectedCategory]);
+  }, [query, selectedCategory, service]);
 
   // Grocery/Vegetables/Mart/Bike Taxi/Parcel are fully built — they live at
   // /service/[type] (browsing + checkout, or map-based booking) rather than
@@ -89,7 +93,14 @@ export default function SearchScreen() {
                 <View style={styles.resultSection}>
                   <Text style={styles.resultLabel}>RESTAURANTS</Text>
                   {results.restaurants.map((r) => (
-                    <Pressable key={r.id} style={styles.resultRow} onPress={() => router.push({ pathname: "/food/restaurant/[id]", params: { id: r.id } })}>
+                    <Pressable
+                      key={r.id}
+                      style={styles.resultRow}
+                      onPress={() => {
+                        trackBehavior({ type: "VIEW_RESTAURANT", category: "food", refType: "restaurant", refId: r.id });
+                        router.push({ pathname: "/food/restaurant/[id]", params: { id: r.id } });
+                      }}
+                    >
                       <RemoteImage uri={r.imageUrl} fallbackLabel={r.name} style={styles.resultThumb} />
                       <View style={{ flex: 1 }}>
                         <Text style={typography.bodyStrong}>{r.name}</Text>
@@ -105,7 +116,14 @@ export default function SearchScreen() {
                 <View style={styles.resultSection}>
                   <Text style={styles.resultLabel}>DISHES</Text>
                   {results.items.map((item) => (
-                    <Pressable key={item.id} style={styles.resultRow} onPress={() => router.push({ pathname: "/food/restaurant/[id]", params: { id: item.restaurantId } })}>
+                    <Pressable
+                      key={item.id}
+                      style={styles.resultRow}
+                      onPress={() => {
+                        trackBehavior({ type: "VIEW_PRODUCT", category: "food", refType: "foodItem", refId: item.id });
+                        router.push({ pathname: "/food/restaurant/[id]", params: { id: item.restaurantId } });
+                      }}
+                    >
                       <RemoteImage uri={item.imageUrl} fallbackLabel={item.name} style={styles.resultThumb} />
                       <View style={{ flex: 1 }}>
                         <View style={styles.dishTitleRow}>

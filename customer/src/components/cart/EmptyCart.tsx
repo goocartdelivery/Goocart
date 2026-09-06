@@ -2,19 +2,21 @@ import { StyleSheet, View } from "react-native";
 import { EmptyState } from "@/components/EmptyState";
 import { PrimaryButton } from "@/components/PrimaryButton";
 
-type Props = {
-  onExplore: () => void;
-};
+type Props =
+  | { mode?: "food"; onExplore: () => void }
+  | { mode: "store"; onExplore: () => void };
 
-export function EmptyCart({ onExplore }: Props) {
+// Separate premium empty states for the Food cart and the Go/Store cart.
+export function EmptyCart({ mode = "food", onExplore }: Props) {
+  const isStore = mode === "store";
   return (
     <View style={styles.wrap}>
       <EmptyState
-        icon="cart"
-        title="Your cart is empty"
-        copy="Looks like you haven't added anything yet. Let's find something delicious."
+        icon={isStore ? "grocery" : "food"}
+        title={isStore ? "Your Go Cart is empty" : "Your food cart is empty"}
+        copy={isStore ? "Shop groceries, vegetables & essentials — all in one place." : "Discover delicious food near you and add your favourites."}
       />
-      <PrimaryButton label="Explore Food" onPress={onExplore} />
+      <PrimaryButton label={isStore ? "Start Shopping" : "Explore Food"} onPress={onExplore} />
     </View>
   );
 }

@@ -6,6 +6,7 @@ import { Icon } from "@/components/Icon";
 type Props = {
   bill: BillBreakdown;
   couponCode: string | null;
+  packagingFee?: number;
 };
 
 function Row({ label, value, strong, highlight }: { label: string; value: number; strong?: boolean; highlight?: boolean }) {
@@ -19,7 +20,7 @@ function Row({ label, value, strong, highlight }: { label: string; value: number
   );
 }
 
-export function BillSummary({ bill, couponCode }: Props) {
+export function BillSummary({ bill, couponCode, packagingFee = 0 }: Props) {
   const savings = bill.restaurantDiscount + bill.couponDiscount;
   return (
     <View style={styles.card}>
@@ -43,6 +44,7 @@ export function BillSummary({ bill, couponCode }: Props) {
         <Row label="Delivery Fee" value={bill.deliveryFee} />
         <Row label="Platform Fee" value={bill.platformFee} />
         <Row label="Taxes" value={bill.taxes} />
+        {packagingFee > 0 ? <Row label="Packaging Fee" value={packagingFee} /> : null}
         {bill.tip > 0 ? <Row label="Tip" value={bill.tip} /> : null}
         <View style={styles.divider} />
         <Row label="To Pay" value={bill.total} strong />

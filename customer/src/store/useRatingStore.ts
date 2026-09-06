@@ -3,8 +3,9 @@ import { create } from "zustand";
 import { OrderRating } from "@/types";
 import { apiGet } from "@/services/apiClient";
 import { ratingService } from "@/services/RatingService";
+import { userStorageKey } from "@/services/userKey";
 
-const STORAGE_KEY = "goocart.ratings.v1";
+const STORAGE_BASE = "goocart.ratings.v1";
 
 type RatingState = {
   ratings: OrderRating[];
@@ -12,6 +13,7 @@ type RatingState = {
   hydrate: () => Promise<void>;
   submitRating: (rating: OrderRating) => Promise<void>;
   ratingFor: (orderId: string) => OrderRating | undefined;
+  clear: () => void;
 };
 
 export const useRatingStore = create<RatingState>((set, get) => ({
@@ -19,7 +21,7 @@ export const useRatingStore = create<RatingState>((set, get) => ({
   hasHydrated: false,
   hydrate: async () => {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      const raw = await AsyncStorage.getItem(userStorageKey(STORAGE_BASE));
       set({ ratings: raw ? JSON.parse(raw) : [], hasHydrated: true });
     } catch {
       set({ ratings: [], hasHydrated: true });
@@ -29,13 +31,17 @@ export const useRatingStore = create<RatingState>((set, get) => ({
     const saved = await ratingService.submitRating(rating);
     const ratings = [...get().ratings.filter((r) => r.orderId !== saved.orderId), saved];
     set({ ratings });
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ratings));
+    await AsyncStorage.setItem(userStorageKey(STORAGE_BASE), JSON.stringify(ratings));
   },
   ratingFor: (orderId) => get().ratings.find((r) => r.orderId === orderId),
+  clear: () => {
+    set({ ratings: [] });
+    void AsyncStorage.removeItem(userStorageKey(STORAGE_BASE));
+  },
 }));
 
 export async function refreshRatings() {
   const data = await apiGet<{ ratings: OrderRating[] }>("/api/v1/customer/ratings");
   useRatingStore.setState({ ratings: data.ratings, hasHydrated: true });
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data.ratings));
+  await AsyncStorage.setItem(userStorageKey(STORAGE_BASE), JSON.stringify(data.ratings));
 }

@@ -13,10 +13,12 @@ import { vendorRouter } from "./routes/vendor.js";
 import { adminRouter } from "./routes/admin.js";
 import { partnerRouter } from "./routes/partner.js";
 import { customerRouter } from "./routes/customer.js";
+import { recommendationsRouter } from "./routes/recommendations.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { fail, ok } from "./lib/http.js";
 import { initRealtime } from "./lib/realtime.js";
 import { startAcceptanceWatchdog } from "./lib/acceptanceWatchdog.js";
+import { startDeliveryAutoCancel } from "./lib/deliveryAutoCancel.js";
 import { startReservationWatchdog } from "./lib/inventory.js";
 import { corsOrigin } from "./lib/cors.js";
 
@@ -86,6 +88,9 @@ app.use("/api/v1/vendor", vendorRouter);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/partner", partnerRouter);
 app.use("/api/v1/customer", customerRouter);
+// Personalization lives under the same customer namespace so a single auth
+// context serves both the store/food APIs and the recommendation engine.
+app.use("/api/v1/customer", recommendationsRouter);
 app.use("/api/v1/notifications", notificationsRouter);
 
 // Vendor / delivery-partner / admin web portal. Kept on the legacy
@@ -121,6 +126,7 @@ if (!isServerless) {
       console.log(`MongoDB connected (database: ${dbName()}).`);
       startAcceptanceWatchdog();
       startReservationWatchdog();
+      startDeliveryAutoCancel();
     })
     .catch((e) => {
       // Log loudly but keep serving: /health then reports the real state

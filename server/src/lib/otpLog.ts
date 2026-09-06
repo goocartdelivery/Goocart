@@ -3,7 +3,12 @@
 // enough to be useless for account takeover but still useful for debugging a
 // specific report ("customer says they never got a code").
 
-export type OtpLogEvent = "EMAIL_OTP_REQUESTED" | "EMAIL_OTP_SENT" | "EMAIL_OTP_VERIFIED" | "EMAIL_OTP_FAILED" | "EMAIL_OTP_EXPIRED" | "EMAIL_SEND_FAILED";
+export type OtpLogEvent =
+  | "OTP_REQUESTED"
+  | "EMAIL_OTP_REQUESTED" | "EMAIL_OTP_SENT" | "EMAIL_OTP_VERIFIED" | "EMAIL_OTP_FAILED" | "EMAIL_OTP_EXPIRED" | "EMAIL_SEND_FAILED"
+  | "SMS_OTP_SENT" | "SMS_SEND_FAILED"
+  | "PHONE_OTP_FAILED" | "PHONE_OTP_EXPIRED" | "PHONE_OTP_VERIFIED";
+
 
 /** "someone@example.com" -> "so***@example.com"; a bare phone number is masked to its last 2 digits. */
 export function maskIdentifier(identifier: string): string {

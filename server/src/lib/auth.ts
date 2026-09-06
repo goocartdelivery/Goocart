@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { Request, Response, NextFunction } from "express";
 import { Otp, Session, User, type UserDoc } from "../models.js";
 import { sendOtpEmail, sendPasswordResetEmail } from "./email.js";
+import { sendSms } from "./sms.js";
 import { logOtpEvent } from "./otpLog.js";
 
 const SESSION_TTL_DAYS = 30;
@@ -138,17 +139,18 @@ export type OtpIssueResult =
 const isProduction = () => process.env.NODE_ENV === "production";
 
 export async function issueOtp(identifier: string, purpose: string): Promise<OtpIssueResult> {
-  logOtpEvent("EMAIL_OTP_REQUESTED", { identifier, purpose });
+  const isEmail = identifier.includes("@");
+  logOtpEvent("OTP_REQUESTED", { identifier, purpose });
 
   const last: any = await Otp.findOne({ identifier, purpose }).sort({ createdAt: -1 }).lean();
   if (last && Date.now() - new Date(last.createdAt).getTime() < OTP_RESEND_COOLDOWN_SECONDS * 1000) {
-    logOtpEvent("EMAIL_OTP_FAILED", { identifier, purpose, reason: "COOLDOWN" });
+    logOtpEvent(isEmail ? "EMAIL_OTP_FAILED" : "PHONE_OTP_FAILED", { identifier, purpose, reason: "COOLDOWN" });
     return { ok: false, code: "COOLDOWN", message: `Please wait ${OTP_RESEND_COOLDOWN_SECONDS} seconds before requesting another code.` };
   }
 
   const recent = await Otp.countDocuments({ identifier, purpose, createdAt: { $gt: new Date(Date.now() - OTP_WINDOW_MINUTES * 60_000) } });
   if (recent >= OTP_MAX_PER_WINDOW) {
-    logOtpEvent("EMAIL_OTP_FAILED", { identifier, purpose, reason: "RATE_LIMITED" });
+    logOtpEvent(isEmail ? "EMAIL_OTP_FAILED" : "PHONE_OTP_FAILED", { identifier, purpose, reason: "RATE_LIMITED" });
     return { ok: false, code: "RATE_LIMITED", message: "Too many codes requested. Try again later." };
   }
 
@@ -159,11 +161,18 @@ export async function issueOtp(identifier: string, purpose: string): Promise<Otp
     codeHash: sha256(code),
     expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000),
   });
-  // Phone delivery has no provider yet; only email codes actually go out.
-  const isEmail = identifier.includes("@");
+
+  // isEmail already determined above
   if (!isEmail) {
-    if (!isProduction()) console.log(`[DEV OTP — no SMS provider] ${identifier} -> ${code}`);
-    return { ok: true, delivered: false, reason: "SMS delivery is not configured yet" };
+    const smsMessage = `Your GooCart verification code is ${code}. This code expires in 5 minutes. Do not share this code with anyone.`;
+    const smsResult = await sendSms(identifier, smsMessage, code);
+    if (smsResult.delivered) {
+      logOtpEvent("SMS_OTP_SENT", { identifier, purpose });
+    } else {
+      logOtpEvent("SMS_SEND_FAILED", { identifier, purpose, reason: smsResult.reason });
+      if (!isProduction()) console.log(`[DEV OTP — SMS not delivered] ${identifier} -> ${code}`);
+    }
+    return { ok: true, delivered: smsResult.delivered, reason: smsResult.reason };
   }
 
   const result = purpose === "PASSWORD_RESET" ? await sendPasswordResetEmail(identifier, code) : await sendOtpEmail(identifier, code);
@@ -176,25 +185,27 @@ export async function issueOtp(identifier: string, purpose: string): Promise<Otp
   return { ok: true, delivered: result.delivered, reason: result.reason };
 }
 
+
 export async function consumeOtp(identifier: string, purpose: string, code: string): Promise<boolean> {
+  const isEmail = identifier.includes("@");
   const doc = await Otp.findOne({ identifier, purpose, consumedAt: null }).sort({ createdAt: -1 });
   if (!doc) {
-    logOtpEvent("EMAIL_OTP_FAILED", { identifier, purpose, reason: "NOT_FOUND" });
+    logOtpEvent(isEmail ? "EMAIL_OTP_FAILED" : "PHONE_OTP_FAILED", { identifier, purpose, reason: "NOT_FOUND" });
     return false;
   }
   if (doc.attempts >= OTP_MAX_ATTEMPTS || doc.expiresAt.getTime() < Date.now()) {
-    logOtpEvent("EMAIL_OTP_EXPIRED", { identifier, purpose });
+    logOtpEvent(isEmail ? "EMAIL_OTP_EXPIRED" : "PHONE_OTP_EXPIRED", { identifier, purpose });
     return false;
   }
   if (doc.codeHash !== sha256(code)) {
     doc.attempts += 1;
     await doc.save();
-    logOtpEvent("EMAIL_OTP_FAILED", { identifier, purpose, reason: "INVALID_CODE" });
+    logOtpEvent(isEmail ? "EMAIL_OTP_FAILED" : "PHONE_OTP_FAILED", { identifier, purpose, reason: "INVALID_CODE" });
     return false;
   }
   doc.consumedAt = new Date();
   await doc.save();
-  logOtpEvent("EMAIL_OTP_VERIFIED", { identifier, purpose });
+  logOtpEvent(isEmail ? "EMAIL_OTP_VERIFIED" : "PHONE_OTP_VERIFIED", { identifier, purpose });
   return true;
 }
 

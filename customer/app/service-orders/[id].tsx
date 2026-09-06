@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -7,13 +7,15 @@ import { EmptyState } from "@/components/EmptyState";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Icon } from "@/components/Icon";
 import { RemoteImage } from "@/components/RemoteImage";
+import { SkeletonBlock } from "@/components/SkeletonBlock";
+import { StatusStepper } from "@/orders/StatusStepper";
+import { OrdersSectionTitle, Hairline, MoneyRow, MonogramTile } from "@/orders/OrderFragments";
+import { serviceBucket } from "@/orders/orderStatus";
 import { serviceOrderService, ServiceOrder } from "@/services/ServiceOrderService";
-import { colors, radius, spacing, typography } from "@/theme";
+import { useReorder } from "@/hooks/useReorder";
+import { colors, spacing, typography } from "@/theme";
 
 const POLL_INTERVAL_MS = 5000;
-
-const RIDE_STEPS: readonly string[] = ["PARTNER_ASSIGNED", "ARRIVING", "IN_PROGRESS", "COMPLETED"];
-const DELIVERY_STEPS: readonly string[] = ["PARTNER_ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"];
 
 const STEP_LABEL: Record<string, string> = {
   PARTNER_ASSIGNED: "Partner assigned",
@@ -26,14 +28,14 @@ const STEP_LABEL: Record<string, string> = {
 };
 
 // One tracking/detail screen for every ServiceOrder (rides, parcels, and
-// grocery/mart/vegetables deliveries) — they all share the same
-// partner-assignment flow server-side (see partner.ts's rideFlow/deliveryFlow),
-// so a single screen covers a gap that previously left service orders as a
-// flat, non-tappable summary card with no detail or live status view.
+// grocery/mart/vegetables deliveries). Store-first hierarchy for grocery/mart;
+// ride/parcel show the fare and route. Rendered with the shared editorial,
+// divider-based language used across the whole Order section.
 export default function ServiceOrderTrackingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<ServiceOrder | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const { reorderService, busy: reorderBusy } = useReorder();
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -47,15 +49,17 @@ export default function ServiceOrderTrackingScreen() {
         setNotFound(true);
       }
     } catch {
-      // Transient network error — keep showing the last known state rather
-      // than flashing a "not found" screen.
+      // Transient network error — keep the last known state.
     }
   }, [id]);
 
   useEffect(() => {
-    void load();
+    const t = setTimeout(() => void load(), 0);
     const interval = setInterval(() => void load(), POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(t);
+      clearInterval(interval);
+    };
   }, [load]);
 
   if (notFound && !order) {
@@ -71,142 +75,203 @@ export default function ServiceOrderTrackingScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <ScreenHeader title="Track order" onBack={() => router.back()} />
-        <View style={styles.center}>
-          <Text style={styles.copy}>Loading your order…</Text>
+        <View style={styles.loadingWrap}>
+          <SkeletonBlock width="60%" height={26} style={{ borderRadius: 8 }} />
+          <SkeletonBlock width="40%" height={14} style={{ marginTop: 8, borderRadius: 8 }} />
+          <SkeletonBlock width="100%" height={120} style={{ marginTop: 24, borderRadius: 12 }} />
         </View>
       </SafeAreaView>
     );
   }
 
   const isRide = order.service === "Bike Taxi";
-  const steps = isRide ? RIDE_STEPS : DELIVERY_STEPS;
+  const isParcel = order.service === "Parcel";
   const finalStatus = isRide ? "COMPLETED" : "DELIVERED";
   const cancelled = order.status.startsWith("CANCELLED");
   const finished = order.status === finalStatus;
   const pending = order.status === "READY_FOR_PICKUP";
-  const stepIndex = steps.indexOf(order.status);
   const code = String(order.details.verificationCode ?? "");
   const pickup = String(order.details.pickup ?? "");
   const drop = String(order.details.drop ?? "");
   const distanceKm = order.details.distanceKm;
-  const items = Array.isArray(order.details.items) ? (order.details.items as { name?: string; quantity?: number }[]) : [];
+  const items: { name?: string; quantity?: number; price?: number }[] = Array.isArray(order.details.items)
+    ? (order.details.items as { name?: string; quantity?: number; price?: number }[])
+    : [];
+  const brand = order.vendorName || order.service;
+  const meta = isRide || isParcel ? (isRide ? "Bike Taxi" : "Parcel") : "GoCart Store";
+  const statusLabel = pending ? "Matching you with a nearby partner…" : STEP_LABEL[order.status] ?? order.status.replaceAll("_", " ");
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScreenHeader title={order.reference} subtitle={order.service} onBack={() => router.back()} />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {finished ? (
-          <View style={styles.doneCard}>
-            <Icon name="checkCircle" size={52} color={colors.success} />
-            <Text style={typography.h1}>{isRide ? "Ride completed" : "Delivered"}</Text>
-            <Text style={styles.copy}>₹{order.total} • {order.reference}</Text>
-            <PrimaryButton label="Back to activity" onPress={() => router.replace("/(tabs)/activity")} />
-          </View>
-        ) : cancelled ? (
-          <View style={styles.doneCard}>
-            <Icon name="close" size={48} color={colors.error} />
-            <Text style={typography.h1}>Cancelled</Text>
-            <PrimaryButton label="Back to activity" onPress={() => router.replace("/(tabs)/activity")} />
-          </View>
-        ) : (
+      <ScreenHeader title={order.reference} onBack={() => router.back()} />
+
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Status hero */}
+        <View style={{ gap: 6 }}>
+          <Text style={styles.eyebrow}>{finished ? "COMPLETED" : cancelled ? "CANCELLED" : "LIVE"}</Text>
+          <Text style={styles.title}>{finished ? (isRide ? "Ride completed" : "Delivered") : cancelled ? "Cancelled" : statusLabel}</Text>
+          <Text style={styles.muted}>
+            {meta} · {order.service}
+          </Text>
+        </View>
+
+        {!finished && !cancelled && (
           <>
-            <View style={styles.card}>
-              <Text style={typography.eyebrow}>{pending ? "FINDING A PARTNER" : "STATUS"}</Text>
-              <Text style={typography.h3}>{pending ? "Matching you with a nearby partner…" : STEP_LABEL[order.status] ?? order.status.replaceAll("_", " ")}</Text>
-              <Text style={styles.liveTag}>● LIVE — updates automatically</Text>
-            </View>
-
-            {pickup || drop ? (
-              <View style={styles.card}>
-                {pickup ? <Text style={styles.copy}>From: {pickup}</Text> : null}
-                {drop ? <Text style={styles.copy}>To: {drop}</Text> : null}
-                {typeof distanceKm === "number" ? <Text style={styles.copy}>{distanceKm} km trip</Text> : null}
-              </View>
-            ) : null}
-
-            {items.length ? (
-              <View style={styles.card}>
-                <Text style={typography.eyebrow}>ITEMS</Text>
-                {items.map((item, index) => (
-                  <Text key={`${item.name ?? "item"}-${index}`} style={styles.copy}>
-                    {item.quantity ?? 1} × {item.name ?? "Item"}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-
-            {order.partner ? (
-              <View style={styles.partnerCard}>
-                <RemoteImage uri={order.partner.photoUrl} fallbackLabel={order.partner.name ?? "P"} style={styles.partnerAvatar} />
-                <View style={{ flex: 1 }}>
-                  <Text style={typography.bodyStrong}>{order.partner.name}</Text>
-                  <Text style={typography.caption}>
-                    {[order.partner.vehicleType, order.partner.vehicleNumber].filter(Boolean).join(" • ") || `Your ${isRide ? "driver" : "delivery partner"}`}
-                  </Text>
+            {/* Merchant / product anchor (store-first for groceries/mart) */}
+            {!isRide && !isParcel ? (
+              <Section>
+                <SectionTitle>STORE</SectionTitle>
+                <View style={styles.brandRow}>
+                  <MonogramTile label={brand} size={52} color={colors.success} radiusValue={10} />
+                  <View style={{ flex: 1, gap: 1 }}>
+                    <Text style={typography.bodyStrong}>{brand}</Text>
+                    <Text style={styles.muted}>GoCart Store</Text>
+                  </View>
                 </View>
-                {order.partner.partnerRating ? (
-                  <View style={styles.partnerRating}>
-                    <Icon name="star" size={13} color={colors.warning} />
-                    <Text style={styles.partnerRatingText}>{order.partner.partnerRating.toFixed(1)}</Text>
+              </Section>
+            ) : null}
+
+            {/* Route / fare */}
+            {pickup || drop ? (
+              <Section>
+                <SectionTitle>{isRide ? "TRIP DETAILS" : "DELIVERY"}</SectionTitle>
+                {pickup ? (
+                  <View style={styles.locRow}>
+                    <View style={styles.locDot} />
+                    <Text style={styles.locText}>{pickup}</Text>
                   </View>
                 ) : null}
-              </View>
-            ) : null}
-
-            {!pending && code ? (
-              <View style={styles.otpCard}>
-                <Text style={styles.otpLabel}>SHOW THIS CODE TO YOUR PARTNER</Text>
-                <Text style={styles.otpValue}>{code}</Text>
-              </View>
-            ) : null}
-
-            <View style={styles.timelineCard}>
-              {steps.map((step, index) => {
-                const done = stepIndex > index;
-                const active = stepIndex === index;
-                return (
-                  <View key={step} style={styles.timelineRow}>
-                    <View style={[styles.marker, done && styles.markerDone, active && styles.markerActive]}>
-                      <Text style={[styles.markerText, (done || active) && styles.markerTextActive]}>{done ? "✓" : active ? "●" : "○"}</Text>
-                    </View>
-                    <Text style={[typography.body, active && typography.bodyStrong, !done && !active ? { color: colors.muted } : null]}>{STEP_LABEL[step]}</Text>
+                {drop ? (
+                  <View style={styles.locRow}>
+                    <View style={[styles.locDot, styles.locDotEnd]} />
+                    <Text style={styles.locText}>{drop}</Text>
                   </View>
-                );
-              })}
-            </View>
+                ) : null}
+                {typeof distanceKm === "number" ? <Text style={styles.muted}>{distanceKm} km trip</Text> : null}
+              </Section>
+            ) : null}
 
-            <View style={styles.totalRow}>
-              <Text style={typography.caption}>Total</Text>
-              <Text style={typography.h3}>₹{order.total}</Text>
-            </View>
+            {/* Products */}
+            {items.length ? (
+              <Section>
+                <SectionTitle>PRODUCTS</SectionTitle>
+                <View style={{ gap: spacing.md }}>
+                  {items.map((item, index) => (
+                    <View key={`${item.name ?? "item"}-${index}`} style={styles.itemRow}>
+                      <MonogramTile label={item.name ?? "I"} size={40} color={colors.success} radiusValue={8} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={typography.bodyStrong} numberOfLines={1}>{item.name ?? "Item"}</Text>
+                        <Text style={styles.muted}>Qty {item.quantity ?? 1}</Text>
+                      </View>
+                      {typeof item.price === "number" ? <Text style={typography.bodyStrong}>₹{item.price}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              </Section>
+            ) : null}
+
+            {/* Delivery partner */}
+            {order.partner ? (
+              <Section>
+                <SectionTitle>{isRide ? "YOUR DRIVER" : "DELIVERY PARTNER"}</SectionTitle>
+                <View style={styles.partnerRow}>
+                  <RemoteImage uri={order.partner.photoUrl} fallbackLabel={order.partner.name ?? "P"} style={styles.partnerAvatar} />
+                  <View style={{ flex: 1, gap: 1 }}>
+                    <Text style={typography.bodyStrong}>{order.partner.name}</Text>
+                    <Text style={styles.muted} numberOfLines={1}>
+                      {[order.partner.vehicleType, order.partner.vehicleNumber].filter(Boolean).join(" • ") || `Your ${isRide ? "driver" : "delivery partner"}`}
+                    </Text>
+                  </View>
+                  {order.partner.partnerRating ? (
+                    <View style={styles.rating}>
+                      <Icon name="star" size={13} color={colors.warning} />
+                      <Text style={styles.ratingText}>{order.partner.partnerRating.toFixed(1)}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </Section>
+            ) : null}
+
+            {/* Verification code */}
+            {!pending && code ? (
+              <Section>
+                <SectionTitle>DELIVERY CODE</SectionTitle>
+                <Text style={styles.otp}>{code}</Text>
+                <Text style={styles.muted}>Show this code to your partner to confirm.</Text>
+              </Section>
+            ) : null}
+
+            {/* Progress */}
+            <Section>
+              <SectionTitle>ORDER PROGRESS</SectionTitle>
+              <StatusStepper kind={isRide ? "ride" : "store"} status={order.status} />
+            </Section>
           </>
         )}
+
+        {finished || cancelled ? (
+          <View style={styles.actions}>
+            <PrimaryButton label="Back to activity" onPress={() => router.replace("/(tabs)/activity")} />
+            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/support/[orderId]", params: { orderId: order.id } })} style={styles.linkRow}>
+              <Text style={styles.linkText}>Get help with this order</Text>
+              <Icon name="forward" size={15} color={colors.primary} />
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Fare + reorder */}
+        <Section>
+          {!finished && !cancelled ? <SectionTitle>PAYMENT</SectionTitle> : null}
+          <MoneyRow label="Order total" value={`₹${order.total}`} strong />
+          <Text style={styles.orderInfoText}>Order {order.reference} · Placed {new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</Text>
+        </Section>
+
+        {!isRide && !isParcel && serviceBucket(order.status) === "completed" && finished ? (
+          <PrimaryButton label="Reorder" variant="secondary" loading={reorderBusy} onPress={() => order && void reorderService(order)} />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function Section({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Hairline style={{ marginBottom: spacing.md }} />
+      {children}
+    </View>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={{ marginBottom: spacing.md }}>
+      <OrdersSectionTitle>{children}</OrdersSectionTitle>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl, gap: spacing.lg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  copy: { ...typography.body, color: colors.muted },
-  liveTag: { ...typography.caption, color: colors.success, fontWeight: "700", marginTop: spacing.xs },
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.lg, gap: 4 },
-  partnerCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md },
-  partnerAvatar: { width: 44, height: 44, borderRadius: radius.md },
-  partnerRating: { flexDirection: "row", alignItems: "center", gap: 3 },
-  partnerRatingText: { ...typography.captionStrong },
-  otpCard: { backgroundColor: colors.primaryMuted, borderRadius: radius.md, padding: spacing.lg, alignItems: "center", gap: 4 },
-  otpLabel: { ...typography.caption, color: colors.primary, fontWeight: "800", letterSpacing: 0.6, textAlign: "center" },
-  otpValue: { fontSize: 32, fontWeight: "800", color: colors.text, letterSpacing: 8 },
-  timelineCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.lg },
-  timelineRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 36 },
-  marker: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
-  markerDone: { backgroundColor: colors.success, borderColor: colors.success },
-  markerActive: { borderColor: colors.primary },
-  markerText: { fontSize: 11, color: colors.muted },
-  markerTextActive: { color: colors.white },
-  totalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  doneCard: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xxxl },
+  loadingWrap: { padding: spacing.xl },
+  scroll: { padding: spacing.xl, paddingBottom: 40, gap: spacing.sm },
+  eyebrow: { ...typography.captionStrong, fontSize: 10, letterSpacing: 1.2, color: colors.primary, textTransform: "uppercase" },
+  title: { ...typography.h1, fontSize: 26 },
+  muted: { ...typography.caption, color: colors.muted },
+  section: { marginTop: spacing.lg, gap: spacing.xs },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.xs },
+  locRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
+  locDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginTop: 3 },
+  locDotEnd: { backgroundColor: colors.success },
+  locText: { ...typography.body, flex: 1 },
+  itemRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  partnerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.xs },
+  partnerAvatar: { width: 46, height: 46, borderRadius: 12 },
+  rating: { flexDirection: "row", alignItems: "center", gap: 3 },
+  ratingText: { ...typography.captionStrong },
+  otp: { fontSize: 32, fontWeight: "800", letterSpacing: 8, color: colors.text },
+  actions: { gap: spacing.sm, marginTop: spacing.lg },
+  linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: spacing.sm },
+  linkText: { ...typography.captionStrong, color: colors.primary },
+  orderInfoText: { ...typography.caption, color: colors.muted, textAlign: "center", marginTop: spacing.sm },
 });

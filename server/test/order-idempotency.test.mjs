@@ -16,8 +16,10 @@ test("placing an order twice with the same idempotency key creates only one orde
     import("../dist/models.js"),
   ]);
   await connectDb();
+  await Order.init();
 
   const server = app.listen(0, "127.0.0.1");
+
   await new Promise((resolve) => server.once("listening", resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
 

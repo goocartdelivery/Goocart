@@ -6,6 +6,7 @@
 /.gradle-cache/
 /.android-home/
 .atlas-tools/
+.trae/
 *.tsbuildinfo
 /.pnp
 .pnp.*
