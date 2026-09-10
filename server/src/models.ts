@@ -86,11 +86,52 @@ const userSchema = new Schema(
     currentLatitude: { type: Number, default: null },
     currentLongitude: { type: Number, default: null },
     locationUpdatedAt: { type: Date, default: null },
+
+    // GeoJSON point kept in sync by pre-save middleware below — enables
+    // $geoNear aggregation for efficient partner proximity queries.
+    location: {
+      type: { type: String, enum: ["Point"], default: "Point" },
+      coordinates: { type: [Number], default: null },
+    },
   },
   opts,
 );
 userSchema.index({ username: 1 }, { unique: true, sparse: true });
 userSchema.index({ phone: 1 }, { unique: true, sparse: true });
+userSchema.index({ location: "2dsphere" });
+userSchema.index({ role: 1, partnerOnline: 1, partnerApprovalStatus: 1, partnerBusy: 1 });
+userSchema.index({ role: 1, partnerOnline: 1, location: "2dsphere" });
+
+// Keep the GeoJSON location field in sync whenever currentLatitude /
+// currentLongitude change — either via save() or updateOne() (the
+// pre-save hook only fires for save(); updateOne uses a middleware).
+userSchema.pre("save", function (next) {
+  const doc = this as any;
+  if (doc.currentLatitude != null && doc.currentLongitude != null) {
+    doc.location = { type: "Point", coordinates: [doc.currentLongitude, doc.currentLatitude] };
+  } else if (!doc.location?.coordinates?.length) {
+    // Clear malformed GeoJSON for users without GPS coords — prevents
+    // "Can't extract geo keys" errors on save().
+    doc.location = undefined;
+  }
+  next();
+});
+userSchema.pre("updateOne", function (next) {
+  const update = this.getUpdate() as any;
+  if (!update) { next(); return; }
+  const $set = update.$set ?? update;
+  if ($set?.currentLatitude != null && $set?.currentLongitude != null) {
+    $set.location = { type: "Point", coordinates: [$set.currentLongitude, $set.currentLatitude] };
+  } else if ($set?.currentLatitude != null || $set?.currentLongitude != null) {
+    // Only one coordinate changed — we need the other from the document.
+    // This is handled by the caller ensuring both are always set together.
+  }
+  // If location exists but has no coordinates, clear it to prevent geo errors.
+  if ($set?.location && !$set?.location?.coordinates?.length) {
+    $set.location = undefined;
+  }
+  next();
+});
 
 const sessionSchema = new Schema(
   {

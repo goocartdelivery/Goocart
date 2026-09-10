@@ -3,6 +3,8 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { FareOverlay } from "@/components/FareOverlay";
+import { RideMapPreview } from "@/components/RideMapPreview";
 import { ServiceConfig } from "@/constants/serviceHome";
 import { serviceOrderService, FarePreview, ServicePricing } from "@/services/ServiceOrderService";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -140,23 +142,33 @@ export function JobBookingCard({ config }: { config: ServiceConfig }) {
         </View>
       ) : null}
 
+      {pickup && drop ? (
+        <RideMapPreview pickup={pickup} drop={drop} height={180} />
+      ) : null}
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {preview && preview.distanceKm ? (
-        <View style={styles.quote}>
-          <View style={{ flex: 1 }}>
-            <Text style={typography.caption}>{preview.distanceKm} km • ₹{preview.baseFare} base + ₹{preview.perKm}/km + ₹{preview.platformFee} fee</Text>
-            <Text style={typography.h2}>₹{preview.total}</Text>
-          </View>
-        </View>
+        <FareOverlay
+          pickupName={pickup?.address ?? ""}
+          dropName={drop?.address ?? ""}
+          distanceKm={preview.distanceKm}
+          baseFare={preview.baseFare}
+          perKm={preview.perKm}
+          platformFee={preview.platformFee}
+          total={preview.total}
+          onBook={() => void book()}
+          booking={booking}
+        />
       ) : (
-        <Text style={typography.caption}>
-          {pricing ? `From ₹${pricing.baseFare} • ₹${pricing.perKm}/km • Check the fare before booking.` : "Loading live pricing…"}
-        </Text>
+        <>
+          <Text style={typography.caption}>
+            {pricing ? `From ₹${pricing.baseFare} • ₹${pricing.perKm}/km • Check the fare before booking.` : "Loading live pricing…"}
+          </Text>
+          <PrimaryButton label={checking ? "Checking…" : "Check fare"} variant="outline" onPress={() => void checkFare()} disabled={checking || !pricing || !pickup || !drop} />
+          <PrimaryButton label={booking ? "Booking…" : user ? `Book ${config.tabLabel}` : "Sign in to book"} onPress={() => void book()} disabled={booking || !preview} />
+        </>
       )}
-
-      <PrimaryButton label={checking ? "Checking…" : "Check fare"} variant="outline" onPress={() => void checkFare()} disabled={checking || !pricing || !pickup || !drop} />
-      <PrimaryButton label={booking ? "Booking…" : user ? `Book ${config.tabLabel}` : "Sign in to book"} onPress={() => void book()} disabled={booking || !preview} />
     </View>
   );
 }
@@ -223,12 +235,5 @@ const styles = StyleSheet.create({
     maxWidth: 180,
   },
   savedText: { ...typography.caption, fontSize: 10.5, color: colors.primary, fontWeight: "700" },
-  quote: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.primaryMuted,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
   error: { ...typography.caption, color: colors.error, fontWeight: "700" },
 });

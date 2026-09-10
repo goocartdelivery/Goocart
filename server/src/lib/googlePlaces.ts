@@ -56,6 +56,80 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
   }
 }
 
+export type DirectionRoute = {
+  coordinates: Array<[number, number]>;
+  distanceKm: number;
+  durationMin: number;
+} | null;
+
+// Full driving route with polyline coordinates for map rendering.
+export async function getDirections(
+  origin: { latitude: number; longitude: number },
+  destination: { latitude: number; longitude: number },
+): Promise<DirectionRoute> {
+  if (!GOOGLE_PLACES_KEY) return null;
+  try {
+    const params = new URLSearchParams({
+      origin: `${origin.latitude},${origin.longitude}`,
+      destination: `${destination.latitude},${destination.longitude}`,
+      mode: "driving",
+      key: GOOGLE_PLACES_KEY,
+    });
+    const res = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      status: string;
+      routes?: Array<{
+        overview_polyline?: { points?: string };
+        legs?: Array<{ distance?: { value: number }; duration?: { value: number } }>;
+      }>;
+    };
+    if (data.status !== "OK" || !data.routes?.length) return null;
+    const route = data.routes[0];
+    const leg = route.legs?.[0];
+    // Decode the encoded polyline string into [lng, lat] coordinates
+    const encoded = route.overview_polyline?.points;
+    const coordinates = encoded ? decodePolyline(encoded) : [];
+    if (!coordinates.length) return null;
+    return {
+      coordinates,
+      distanceKm: Math.round(((leg?.distance?.value ?? 0) / 1000) * 10) / 10,
+      durationMin: Math.round((leg?.duration?.value ?? 0) / 60),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Decode Google's polyline encoding format into [lng, lat] coordinate pairs.
+function decodePolyline(encoded: string): Array<[number, number]> {
+  const coords: Array<[number, number]> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  while (index < encoded.length) {
+    let b: number;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : result >> 1;
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : result >> 1;
+    coords.push([lng / 1e5, lat / 1e5]);
+  }
+  return coords;
+}
+
 // Real road distance in km, driving mode — replaces the haversine*1.35
 // straight-line approximation whenever this key is configured.
 export async function drivingDistanceKm(

@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { EmptyState } from "@/components/EmptyState";
 import { Icon } from "@/components/Icon";
 import { VegBadge } from "@/components/VegBadge";
+import { SkeletonMenuCard } from "@/components/SkeletonLoader";
 import { colors, radius, spacing, typography } from "@/theme";
 import { useVendorStore } from "@/store/useVendorStore";
 import { FoodItem } from "@/types";
@@ -19,22 +20,24 @@ export default function MenuScreen() {
   const toggleAvailable = async (item: FoodItem) => {
     try {
       await updateMenuItem(item.id, { available: !item.available });
-    } catch {
-      // Store surfaces the error via its `error` field; nothing else to do here.
-    }
+    } catch {}
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={typography.h1}>Menu</Text>
+        <View>
+          <Text style={typography.h1}>Menu</Text>
+          {menu.length > 0 && <Text style={styles.headerSub}>{menu.length} items</Text>}
+        </View>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/menu/new")}
-          style={styles.addBtn}
+          style={({ pressed }) => [styles.addBtn, pressed && styles.addBtnPressed]}
           disabled={!restaurant}
         >
-          <Icon name="add" size={26} color={restaurant ? colors.primary : colors.border} />
+          <Icon name="add" size={22} color={restaurant ? colors.white : colors.border} />
+          <Text style={[styles.addBtnText, !restaurant && { color: colors.border }]}>Add</Text>
         </Pressable>
       </View>
       <FlatList
@@ -45,31 +48,49 @@ export default function MenuScreen() {
         ListEmptyComponent={
           !restaurant ? (
             <EmptyState icon="storefront" title="No restaurant yet" copy="An admin needs to link your account before you can add dishes." />
+          ) : loading ? (
+            <View style={styles.content}>
+              <SkeletonMenuCard />
+              <SkeletonMenuCard />
+              <SkeletonMenuCard />
+            </View>
           ) : (
             <EmptyState icon="menu" title="Your menu is empty" copy="Tap + to add your first dish." />
           )
         }
         renderItem={({ item }) => (
-          <Pressable onPress={() => router.push({ pathname: "/menu/[id]", params: { id: item.id } })} style={styles.card}>
+          <Pressable
+            onPress={() => router.push({ pathname: "/menu/[id]", params: { id: item.id } })}
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+          >
             <View style={styles.cardRow}>
               {item.imageUrl ? (
                 <Image source={{ uri: item.imageUrl }} style={styles.thumb} resizeMode="cover" />
               ) : (
                 <View style={styles.thumbEmpty}>
-                  <Icon name="image" size={18} color={colors.muted} />
+                  <Icon name="image" size={20} color={colors.muted} />
                 </View>
               )}
-              <VegBadge veg={item.veg} />
               <View style={{ flex: 1 }}>
-                <Text style={typography.h3}>{item.name}</Text>
-                <Text style={styles.copy}>₹{item.price}</Text>
+                <View style={styles.nameRow}>
+                  <VegBadge veg={item.veg} />
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                </View>
+                <Text style={styles.price}>₹{item.price}</Text>
               </View>
-              <Switch
-                value={item.available}
-                onValueChange={() => void toggleAvailable(item)}
-                trackColor={{ false: colors.border, true: colors.successMuted }}
-                thumbColor={item.available ? colors.success : colors.surface}
-              />
+              <View style={styles.toggleWrap}>
+                <Text style={[styles.availLabel, { color: item.available ? colors.success : colors.muted }]}>
+                  {item.available ? "In stock" : "Sold out"}
+                </Text>
+                <Switch
+                  value={item.available}
+                  onValueChange={() => void toggleAvailable(item)}
+                  trackColor={{ false: colors.border, true: colors.successMuted }}
+                  thumbColor={item.available ? colors.success : colors.surface}
+                />
+              </View>
             </View>
           </Pressable>
         )}
@@ -92,12 +113,46 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     backgroundColor: colors.surface,
   },
-  addBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  headerSub: { ...typography.caption, marginTop: 2 },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: 4,
+  },
+  addBtnPressed: { opacity: 0.8 },
+  addBtnText: { ...typography.button, fontSize: 13 },
   content: { padding: spacing.xl, flexGrow: 1 },
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.lg },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardPressed: { opacity: 0.85 },
   cardRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  thumb: { width: 44, height: 44, borderRadius: radius.sm },
-  thumbEmpty: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  copy: { ...typography.body, color: colors.muted },
+  thumb: { width: 56, height: 56, borderRadius: radius.md },
+  thumbEmpty: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  itemName: { ...typography.bodyStrong, flex: 1 },
+  price: { ...typography.bodyStrong, color: colors.primary, marginTop: 4 },
+  toggleWrap: { alignItems: "flex-end", gap: 4 },
+  availLabel: { ...typography.captionStrong },
   error: { ...typography.caption, color: colors.error, textAlign: "center", paddingBottom: spacing.md },
 });

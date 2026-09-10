@@ -14,6 +14,8 @@ import { useRideBookingStore } from "@/store/useRideBookingStore";
 const DEFAULT_DELTA = 0.01;
 const SEARCH_DEBOUNCE_MS = 400;
 
+const POPULAR_PLACES = ["Mumbai", "Delhi", "Bangalore", "Hyderabad", "Chennai", "Kolkata", "Pune", "Jaipur"];
+
 // Tap-and-pan-to-place picker in the Rapido/Ola/Uber style: the pin stays
 // fixed at the screen center and the map moves under it, rather than a
 // draggable marker — this is the map interaction model those apps use, and
@@ -157,6 +159,23 @@ export default function LocationPickerScreen() {
             ))}
           </View>
         )}
+        {query.trim().length === 0 && results.length === 0 && (
+          <View style={styles.popularSection}>
+            <Text style={styles.popularTitle}>Popular places in India</Text>
+            <View style={styles.popularRow}>
+              {POPULAR_PLACES.map((city) => (
+                <Pressable
+                  key={city}
+                  style={styles.popularChip}
+                  onPress={() => onSearchChange(city)}
+                >
+                  <Icon name="location" size={12} color={colors.primary} />
+                  <Text style={styles.popularChipText}>{city}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={styles.mapWrap}>
@@ -254,4 +273,17 @@ const styles = StyleSheet.create({
   footer: { padding: spacing.lg, gap: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
   addressRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
   addressText: { ...typography.bodyStrong, flex: 1 },
+  popularSection: { marginTop: spacing.sm },
+  popularTitle: { ...typography.captionStrong, marginBottom: spacing.sm },
+  popularRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  popularChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primaryMuted,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  popularChipText: { ...typography.caption, fontSize: 11, color: colors.primary, fontWeight: "700" },
 });

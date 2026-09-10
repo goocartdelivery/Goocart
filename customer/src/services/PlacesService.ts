@@ -18,11 +18,13 @@ const USER_AGENT = "Goocart-Customer/1.0 (pickup/drop location picker)";
 
 async function searchNominatim(query: string, near?: { latitude: number; longitude: number }): Promise<PlaceSuggestion[]> {
   try {
-    const params = new URLSearchParams({ format: "json", limit: "6", q: query });
+    const params = new URLSearchParams({ format: "json", limit: "6", q: query, countrycodes: "in" });
+    // India bounding box: south-west (68.0, 6.5) to north-east (97.5, 37.1)
+    params.set("viewbox", "68.0,6.5,97.5,37.1");
     if (near) {
+      // Tighter viewbox around the user's current position when available
       const delta = 0.5;
       params.set("viewbox", `${near.longitude - delta},${near.latitude + delta},${near.longitude + delta},${near.latitude - delta}`);
-      params.set("bounded", "0");
     }
     const res = await fetch(`${NOMINATIM_URL}/search?${params.toString()}`, { headers: { "User-Agent": USER_AGENT } });
     if (!res.ok) return [];

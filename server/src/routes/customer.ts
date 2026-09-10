@@ -4,7 +4,8 @@ import { requireAuth, type AuthedRequest } from "../lib/auth.js";
 import { ok, fail } from "../lib/http.js";
 import { haversineKm, isValidCoordinate } from "../lib/geo.js";
 import { geocodeAddress } from "../lib/geocode.js";
-import { autocompletePlaces, drivingDistanceKm, getPlaceDetails } from "../lib/googlePlaces.js";
+import { autocompletePlaces, drivingDistanceKm, getDirections, getPlaceDetails } from "../lib/googlePlaces.js";
+import { getOSRMDirections } from "../lib/osrm.js";
 import { getPricingSettings } from "../lib/pricingSettings.js";
 import { reserveLines, consumeReservations, releaseReservations } from "../lib/inventory.js";
 
@@ -361,6 +362,27 @@ customerRouter.get("/places/details", requireAuth, async (req, res) => {
     res.json(ok(details));
   } catch (e) {
     res.status(500).json(fail("PLACE_DETAILS_FAILED", e instanceof Error ? e.message : "Could not load this place"));
+  }
+});
+
+customerRouter.get("/directions", async (req, res) => {
+  try {
+    const originLat = Number(req.query.originLat);
+    const originLng = Number(req.query.originLng);
+    const destLat = Number(req.query.destLat);
+    const destLng = Number(req.query.destLng);
+    if (!isValidCoordinate(originLat, originLng) || !isValidCoordinate(destLat, destLng)) {
+      return res.json(ok({ route: null }));
+    }
+    const origin = { latitude: originLat, longitude: originLng };
+    const destination = { latitude: destLat, longitude: destLng };
+    // Try Google Directions first, fall back to free OSRM
+    const googleRoute = await getDirections(origin, destination);
+    if (googleRoute) return res.json(ok({ route: googleRoute }));
+    const osrmRoute = await getOSRMDirections(origin, destination);
+    res.json(ok({ route: osrmRoute }));
+  } catch {
+    res.json(ok({ route: null }));
   }
 });
 

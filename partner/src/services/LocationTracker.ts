@@ -1,46 +1,81 @@
 import * as Location from "expo-location";
 import { apiPost } from "@/services/apiClient";
 
-const UPDATE_INTERVAL_MS = 7000; // within the spec's 5-10s window
+const ACTIVE_UPDATE_INTERVAL_MS = 7000; // within the spec's 5-10s window
+const IDLE_UPDATE_INTERVAL_MS = 30_000; // 30s when online but no active job
 const MIN_DISTANCE_METERS = 15; // avoid spamming updates while stationary
 
-let subscription: Location.LocationSubscription | null = null;
+let activeSubscription: Location.LocationSubscription | null = null;
+let idleSubscription: Location.LocationSubscription | null = null;
+
+async function requestPermission(): Promise<{ granted: boolean; reason?: string }> {
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== "granted") return { granted: false, reason: "Location permission is required to deliver orders." };
+  return { granted: true };
+}
+
+function sendLocation(position: Location.LocationObject): void {
+  void apiPost("/api/v1/partner/location", {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    heading: position.coords.heading,
+    speed: position.coords.speed,
+  }).catch(() => {
+    // A dropped connection here shouldn't crash the delivery flow — the
+    // next tick tries again.
+  });
+}
 
 /**
- * Starts pushing this device's real GPS position to the backend while a
- * delivery is active (spec section 32). Nothing here fabricates or
- * interpolates a position — every point sent is a genuine fix from the
- * device's location hardware, and the server only relays it onward.
+ * High-frequency tracking while a delivery is active (spec section 32).
  */
 export async function startLocationTracking(): Promise<{ ok: boolean; reason?: string }> {
-  if (subscription) return { ok: true };
+  if (activeSubscription) return { ok: true };
 
-  const { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== "granted") return { ok: false, reason: "Location permission is required to deliver orders." };
+  // Stop idle tracking if it's running — active tracking takes over.
+  stopIdleTracking();
 
-  subscription = await Location.watchPositionAsync(
-    { accuracy: Location.Accuracy.High, timeInterval: UPDATE_INTERVAL_MS, distanceInterval: MIN_DISTANCE_METERS },
-    (position) => {
-      void apiPost("/api/v1/partner/location", {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        heading: position.coords.heading,
-        speed: position.coords.speed,
-      }).catch(() => {
-        // A dropped connection here shouldn't crash the delivery flow — the
-        // next tick tries again.
-      });
-    },
+  const perm = await requestPermission();
+  if (!perm.granted) return { ok: false, reason: perm.reason };
+
+  activeSubscription = await Location.watchPositionAsync(
+    { accuracy: Location.Accuracy.High, timeInterval: ACTIVE_UPDATE_INTERVAL_MS, distanceInterval: MIN_DISTANCE_METERS },
+    sendLocation,
+  );
+  return { ok: true };
+}
+
+/**
+ * Low-frequency "idle" tracking while the partner is online but has no
+ * active job. Ensures the partner's location stays current for nearby
+ * searches without draining the battery.
+ */
+export async function startIdleTracking(): Promise<{ ok: boolean; reason?: string }> {
+  if (idleSubscription) return { ok: true };
+  // Don't start idle tracking if active tracking is running.
+  if (activeSubscription) return { ok: true };
+
+  const perm = await requestPermission();
+  if (!perm.granted) return { ok: false, reason: perm.reason };
+
+  idleSubscription = await Location.watchPositionAsync(
+    { accuracy: Location.Accuracy.Balanced, timeInterval: IDLE_UPDATE_INTERVAL_MS, distanceInterval: MIN_DISTANCE_METERS },
+    sendLocation,
   );
   return { ok: true };
 }
 
 export function stopLocationTracking(): void {
-  subscription?.remove();
-  subscription = null;
+  activeSubscription?.remove();
+  activeSubscription = null;
+}
+
+export function stopIdleTracking(): void {
+  idleSubscription?.remove();
+  idleSubscription = null;
 }
 
 export function isTrackingLocation(): boolean {
-  return subscription !== null;
+  return activeSubscription !== null || idleSubscription !== null;
 }

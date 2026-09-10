@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Order, Restaurant, User } from "../models.js";
 import { haversineKm, isValidCoordinate } from "./geo.js";
 import { isPartnerEligible } from "./auth.js";
@@ -55,25 +56,55 @@ type ScoredPartner = {
 async function eligiblePartnersNear(latitude: number, longitude: number, radiusKm: number, excludeIds: string[] = [], settings?: AutomationSettings): Promise<ScoredPartner[]> {
   if (!isValidCoordinate(latitude, longitude)) return [];
   const automation = settings ?? (await getAutomationSettings());
-  const candidates = await User.find({
-    role: "DELIVERY_PARTNER",
-    status: "ACTIVE",
-    partnerApprovalStatus: "APPROVED",
-    partnerOnline: true,
-    partnerBusy: false,
-    currentLatitude: { $ne: null },
-    currentLongitude: { $ne: null },
-    _id: { $nin: excludeIds },
-  }).lean();
+  const maxDistanceMeters = radiusKm * 1000;
 
-  return candidates
-    .map((partner: any) => scorePartner(partner, latitude, longitude, radiusKm, automation))
-    .filter((p) => p.distanceKm <= radiusKm)
+  const raw: any[] = await User.aggregate([
+    {
+      $match: {
+        role: "DELIVERY_PARTNER",
+        status: "ACTIVE",
+        partnerApprovalStatus: "APPROVED",
+        partnerOnline: true,
+        partnerBusy: false,
+        location: { $exists: true, $ne: null },
+      },
+    },
+    {
+      $geoNear: {
+        near: { type: "Point", coordinates: [longitude, latitude] },
+        distanceField: "distanceMeters",
+        maxDistance: maxDistanceMeters,
+        spherical: true,
+      },
+    },
+    ...(excludeIds.length > 0 ? [{ $match: { _id: { $nin: excludeIds.map((id) => new mongoose.Types.ObjectId(id)) } } }] : []),
+    {
+      $project: {
+        distanceMeters: 1,
+        name: 1,
+        email: 1,
+        phone: 1,
+        currentLatitude: 1,
+        currentLongitude: 1,
+        partnerAcceptanceRate: 1,
+        partnerRecentRejectionRate: 1,
+        partnerRating: 1,
+        partnerOnline: 1,
+        partnerBusy: 1,
+        partnerLastAssignedAt: 1,
+      },
+    },
+  ]);
+
+  return raw
+    .map((partner: any) => {
+      const distanceKm = Math.round((partner.distanceMeters / 1000) * 100) / 100;
+      return scorePartner({ ...partner, currentLatitude: partner.currentLatitude, currentLongitude: partner.currentLongitude }, latitude, longitude, radiusKm, distanceKm, automation);
+    })
     .sort((a, b) => b.score - a.score);
 }
 
-function scorePartner(partner: any, latitude: number, longitude: number, radiusKm: number, settings: AutomationSettings): ScoredPartner {
-  const distanceKm = haversineKm({ latitude, longitude }, { latitude: partner.currentLatitude, longitude: partner.currentLongitude });
+function scorePartner(partner: any, latitude: number, longitude: number, radiusKm: number, distanceKm: number, settings: AutomationSettings): ScoredPartner {
   const etaToStoreMinutes = Math.round((distanceKm / settings.dispatch.averageCitySpeedKmph) * 60);
   const now = Date.now();
   const idleMinutes = partner.partnerLastAssignedAt ? Math.max(0, (now - new Date(partner.partnerLastAssignedAt).getTime()) / 60_000) : 60;
@@ -176,7 +207,15 @@ export async function broadcastDeliveryOffer(orderId: unknown, attempt = 1, radi
   };
 
   for (const { partner, distanceKm, etaToStoreMinutes, score, scoreBreakdown } of nearby) {
-    emitToPartner(partner._id, "delivery:offer", { ...payload, pickupDistanceKm: Math.round(distanceKm * 10) / 10, etaToStoreMinutes, dispatchScore: score, scoreBreakdown });
+    emitToPartner(partner._id, "delivery:offer", {
+      ...payload,
+      pickupDistanceKm: Math.round(distanceKm * 10) / 10,
+      distanceToRestaurantKm: Math.round(distanceKm * 10) / 10,
+      estimatedArrivalMin: etaToStoreMinutes,
+      etaToStoreMinutes,
+      dispatchScore: score,
+      scoreBreakdown,
+    });
     void notifyUser(
       partner._id,
       "New Delivery Available",

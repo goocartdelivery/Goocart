@@ -64,7 +64,7 @@ partnerRouter.post("/location", async (req: AuthedRequest, res) => {
     if (!isValidCoordinate(latitude, longitude)) return res.status(400).json(fail("INVALID_LOCATION", "A valid latitude and longitude are required."));
 
     const now = new Date();
-    await User.updateOne({ _id: req.user!._id }, { $set: { currentLatitude: latitude, currentLongitude: longitude, locationUpdatedAt: now } });
+    await User.updateOne({ _id: req.user!._id }, { $set: { currentLatitude: latitude, currentLongitude: longitude, locationUpdatedAt: now, location: { type: "Point", coordinates: [longitude, latitude] } } });
 
     const activeOrder = await Order.findOne({ partnerId: req.user!._id, status: { $in: ACTIVE_DELIVERY_STATUSES } }, { customerId: 1, restaurantId: 1, partnerId: 1 }).lean();
 

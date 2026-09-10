@@ -10,7 +10,7 @@ import { colors, radius, spacing, typography } from "@/theme";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useOrdersStore } from "@/store/useOrdersStore";
 import { getSocket } from "@/services/socket";
-import { startLocationTracking, stopLocationTracking } from "@/services/LocationTracker";
+import { startLocationTracking, stopLocationTracking, startIdleTracking, stopIdleTracking } from "@/services/LocationTracker";
 import { ApiError } from "@/services/apiClient";
 import { serviceJobService } from "@/services/ServiceJobService";
 import { FoodOrder, ServiceJob } from "@/types";
@@ -94,8 +94,8 @@ export default function HomeScreen() {
   );
   const servicePool = useMemo(() => serviceJobs.filter((job) => !job.partnerId && job.status === "READY_FOR_PICKUP"), [serviceJobs]);
 
-  // GPS only streams while there is an actual job to track against (spec
-  // section 32) — never in the background just for being "online".
+  // GPS tracking: high-frequency while a job is active, low-frequency
+  // "idle" tracking while online but jobless, and stopped when offline.
   const trackingActiveTaskId = useRef<string | null>(null);
   useEffect(() => {
     const activeId = activeTask?.id ?? activeServiceJob?.id ?? null;
@@ -109,11 +109,23 @@ export default function HomeScreen() {
     } else if (trackingActiveTaskId.current) {
       trackingActiveTaskId.current = null;
       stopLocationTracking();
+      // Resume idle tracking if still online.
+      if (online) void startIdleTracking();
     }
     return () => {
       if (!activeId) stopLocationTracking();
     };
-  }, [activeTask, activeServiceJob]);
+  }, [activeTask, activeServiceJob, online]);
+
+  // Start / stop idle tracking based on online toggle.
+  useEffect(() => {
+    if (online && !activeTask && !activeServiceJob) {
+      void startIdleTracking();
+    } else {
+      stopIdleTracking();
+    }
+    return () => { stopIdleTracking(); };
+  }, [online, activeTask, activeServiceJob]);
 
   const toggleOnline = async () => {
     try {
