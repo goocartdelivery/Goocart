@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SkeletonBlock } from "@/components/SkeletonBlock";
 import { HomeCategory } from "@/constants/serviceHome";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -55,7 +55,13 @@ export function GroceryCategoryGrid({ categories, loading, onSelectCategory }: P
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.emoji}>{c.emoji ?? "🛒"}</Text>
+              <View style={styles.iconWrap}>
+                {c.image ? (
+                  <Image source={c.image} style={styles.catImage} resizeMode="contain" />
+                ) : (
+                  <Text style={styles.emoji}>{c.emoji ?? "🛒"}</Text>
+                )}
+              </View>
               <Text style={styles.label} numberOfLines={2}>
                 {c.label}
               </Text>
@@ -87,9 +93,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 4,
     paddingVertical: 6,
-    gap: 2,
+    gap: 4,
   },
   pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.6)",
+  },
+  catImage: { width: 42, height: 42 },
   emoji: { fontSize: 26, lineHeight: 30 },
   label: {
     ...typography.captionStrong,

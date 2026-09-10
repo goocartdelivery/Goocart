@@ -1,13 +1,14 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { AddressCard } from "@/components/AddressCard";
 import { colors, radius, spacing, typography } from "@/theme";
 import { useAddressStore } from "@/store/useAddressStore";
-import { locationService } from "@/services/LocationService";
+import { useMapPickStore } from "@/store/useMapPickStore";
+import { detectAndFillCurrentLocation, mergeDetectedFields } from "@/services/AddressDetection";
 import { Address } from "@/types";
 
 const EMPTY_FORM = {
@@ -17,6 +18,7 @@ const EMPTY_FORM = {
   street: "",
   landmark: "",
   city: "",
+  state: "",
   pincode: "",
   contactName: "",
   contactPhone: "",
@@ -29,6 +31,7 @@ export default function AddressScreen() {
   const select = useAddressStore((s) => s.select);
   const addAddress = useAddressStore((s) => s.addAddress);
   const removeAddress = useAddressStore((s) => s.removeAddress);
+  const selectedAddress = addresses.find((a) => a.id === selectedId) ?? null;
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -49,17 +52,58 @@ export default function AddressScreen() {
     router.back();
   };
 
+  const openMapPicker = () => {
+    const seed = coords ?? (selectedAddress ? { latitude: selectedAddress.latitude, longitude: selectedAddress.longitude } : null);
+    if (seed) {
+      router.push({ pathname: "/address-picker", params: { lat: String(seed.latitude), lng: String(seed.longitude) } });
+    } else {
+      router.push("/address-picker");
+    }
+  };
+
+  // When the map picker route pops back, adopt the confirmed pin: exact
+  // coordinates plus whatever address fields the geocoder could fill, without
+  // clobbering anything the customer has already typed. Picking nothing
+  // leaves the form untouched.
+  useFocusEffect(
+    useCallback(() => {
+      const picked = useMapPickStore.getState().consume();
+      if (!picked) {
+        setError("");
+        return;
+      }
+      setCoords({ latitude: picked.latitude, longitude: picked.longitude });
+      setForm((f) => ({
+        ...f,
+        ...mergeDetectedFields(
+          { street: f.street, city: f.city, state: f.state, pincode: f.pincode },
+          { street: picked.street, city: picked.city, state: picked.state, pincode: picked.pincode },
+        ),
+      }));
+    }, []),
+  );
+
   const useCurrentLocation = async () => {
     setLocating(true);
     setError("");
     try {
-      const resolved = await locationService.getCurrentLocation();
-      if (!resolved) {
-        setError("Couldn't get your location. Check location permissions and try again.");
+      const outcome = await detectAndFillCurrentLocation();
+      if (!outcome.ok) {
+        setError(outcome.message);
         return;
       }
-      setCoords({ latitude: resolved.latitude, longitude: resolved.longitude });
-      setForm((f) => ({ ...f, city: f.city || resolved.city }));
+      const { location } = outcome;
+      setCoords({ latitude: location.latitude, longitude: location.longitude });
+      // Fill-only merge: street/city/state/pincode are completed only when
+      // the user hasn't already typed them, so a re-detection never wipes a
+      // manual edit.
+      setForm((f) => ({
+        ...f,
+        ...mergeDetectedFields(
+          { street: f.street, city: f.city, state: f.state, pincode: f.pincode },
+          { street: location.street, city: location.city, state: location.state, pincode: location.pincode },
+        ),
+      }));
     } finally {
       setLocating(false);
     }
@@ -92,7 +136,7 @@ export default function AddressScreen() {
         street: form.street || undefined,
         landmark: form.landmark || undefined,
         city: form.city,
-        state: "",
+        state: form.state,
         pincode: form.pincode,
         contactName: form.contactName,
         contactPhone: form.contactPhone,
@@ -139,6 +183,7 @@ export default function AddressScreen() {
               onPress={() => void useCurrentLocation()}
               disabled={locating}
             />
+            <PrimaryButton label="Choose on Map" variant="outline" onPress={openMapPicker} />
             <LabelPicker value={form.label} onChange={(label) => setForm({ ...form, label })} />
             <Field label="House / Flat" value={form.house} onChangeText={(v) => setForm({ ...form, house: v })} onMeasured={(y) => { fieldYRef.current.house = y; }} onFocusRequest={() => scrollToField("house")} />
             <Field label="Building" value={form.building} onChangeText={(v) => setForm({ ...form, building: v })} onMeasured={(y) => { fieldYRef.current.building = y; }} onFocusRequest={() => scrollToField("building")} />

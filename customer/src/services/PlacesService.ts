@@ -68,6 +68,33 @@ export async function resolvePlace(suggestion: PlaceSuggestion): Promise<{ latit
   }
 }
 
+export type ReverseGeocodeDetailedResult = {
+  street: string;
+  city: string;
+  state: string;
+  pincode: string;
+};
+
+// Same device geocoder as reverseGeocode, but returns the raw structured
+// fields (street / city / region / pincode) instead of a single display
+// string — the shape the address form needs when "detect and fill" runs.
+// Null means the geocoder had no row for these coordinates (a different
+// situation from "row exists but fields are sparse", which stays ok).
+export async function reverseGeocodeDetailed(latitude: number, longitude: number): Promise<ReverseGeocodeDetailedResult | null> {
+  try {
+    const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
+    if (!place) return null;
+    return {
+      street: place.street || place.name || "",
+      city: place.city || place.subregion || place.district || "",
+      state: place.region || place.subregion || place.district || "",
+      pincode: place.postalCode || "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 // The device's own geocoder (Google Play services on Android) — reliable
 // and needs no API key of its own, unlike Nominatim's reverse endpoint
 // which this replaced.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, ScrollView, StyleSheet, Text, Pressable, View } from "react-native";
 import { Image } from "expo-image";
 import { useActiveServiceStore } from "@/store/useActiveServiceStore";
@@ -18,19 +18,61 @@ const SERVICE_EMOJIS: Record<string, string> = {
   PARCEL: "📦",
 };
 
+export type ServiceTabsLayoutInfo = { type: string; x: number; width: number };
+
+type Props = {
+  onLayoutInfo?: (info: ServiceTabsLayoutInfo[]) => void;
+  pillTranslateX?: Animated.Value;
+  onScrollX?: Animated.Value;
+};
+
 // The colored "active" pill slides between tabs instead of teleporting. Tab
 // x-positions are measured with onLayout (not hardcoded), so the pill tracks
 // the right tab on every screen size — including when the row scrolls.
-export function ServiceTabs() {
+// If pillTranslateX is supplied from the parent (HomeScreen), we use that
+// same Animated.Value so an external bridge/connection shape can track the
+// exact same motion. Otherwise we fall back to a local value.
+// onScrollX mirrors the row's horizontal scroll offset (content-space), so the
+// parent can keep its header→tab connection glued to the pill when the row
+// scrolls on narrow screens. We also auto-scroll the active tab fully into
+// view so the connection never dangles off-screen.
+export function ServiceTabs({ onLayoutInfo, pillTranslateX: externalX, onScrollX: externalScrollX }: Props = {}) {
   const active = useActiveServiceStore((s) => s.active);
   const setActive = useActiveServiceStore((s) => s.setActive);
   const theme = serviceConfig(active).theme;
 
   const [tabX, setTabX] = useState<Record<string, number>>({});
   const [tabW, setTabW] = useState<number>(76);
-  // Stable Animated.Value; animations are driven from effects/handlers only.
-  const [translateX] = useState(() => new Animated.Value(0));
+  const [localX] = useState(() => new Animated.Value(0));
+  const translateX = externalX ?? localX;
+  const [localScrollX] = useState(() => new Animated.Value(0));
+  const scrollX = externalScrollX ?? localScrollX;
   const initialized = useRef(false);
+  const reportedRef = useRef<string>("");
+
+  const [viewportW, setViewportW] = useState(0);
+  const [contentW, setContentW] = useState(0);
+  const currentScroll = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const scrollEvent = useMemo(
+    () =>
+      // The listener below only runs when a native scroll event fires (never
+      // during render), so tracking the offset in a ref here is intentionally
+      // safe; the rule cannot tell render-time from event-time access.
+      // JS driver (not native): this value feeds the header→tab connection
+      // which also animates colors/opacity on the JS thread, and React Native
+      // forbids mixing native + JS consumers of the same animated node.
+      // eslint-disable-next-line react-hooks/refs
+      Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+        useNativeDriver: false,
+        listener: (event: { nativeEvent: { contentOffset: { x: number } } }) => {
+          currentScroll.current = event?.nativeEvent?.contentOffset?.x ?? 0;
+        },
+      }),
+    // scrollX is a stable Animated.Value; the event is built once.
+    [scrollX],
+  );
 
   useEffect(() => {
     const x = tabX[active];
@@ -42,25 +84,62 @@ export function ServiceTabs() {
     }
     Animated.spring(translateX, {
       toValue: x,
-      useNativeDriver: true,
+      useNativeDriver: false,
       damping: 18,
       stiffness: 190,
       mass: 0.6,
     }).start();
   }, [active, tabX, translateX]);
 
+  // Keep the active tab fully visible so the header connection stays on-screen:
+  // scroll the row only when the tab is clipped (never on a simple tap that
+  // leaves it visible, and never toward the past the row's boundaries).
+  useEffect(() => {
+    const plannedX = tabX[active];
+    if (plannedX === undefined || viewportW <= 0) return;
+    const maxScroll = Math.max(0, contentW - viewportW);
+    const visiblePad = 24;
+    const cur = currentScroll.current;
+    const cutRight = plannedX + tabW > cur + viewportW - visiblePad;
+    if (cutRight) {
+      scrollRef.current?.scrollTo({ x: Math.min(plannedX + tabW + visiblePad - viewportW, maxScroll), animated: true });
+    } else if (plannedX < cur + visiblePad) {
+      scrollRef.current?.scrollTo({ x: Math.max(plannedX - visiblePad, 0), animated: true });
+    }
+  }, [active, tabX, tabW, viewportW, contentW]);
+
   const onLayoutTab = (type: string) => (e: { nativeEvent: { layout: { x: number; width: number } } }) => {
     const { x, width } = e.nativeEvent.layout;
-    if (width !== tabW) setTabW(width);
+    const tabChanged = width !== tabW;
+    const prevX = tabX[type];
+    if (tabChanged) setTabW(width);
     setTabX((prev) => (prev[type] === x ? prev : { ...prev, [type]: x }));
+    if (onLayoutInfo) {
+      const next: ServiceTabsLayoutInfo[] = Object.entries({ ...tabX, [type]: x }).map(([t, xx]) => {
+        const w = t === type ? width : tabW;
+        return { type: t, x: xx ?? 0, width: w };
+      });
+      const sig = next.map((n) => `${n.type}:${n.x.toFixed(0)}x${n.width.toFixed(0)}`).join("|");
+      if (sig !== reportedRef.current) {
+        reportedRef.current = sig;
+        onLayoutInfo(next);
+      }
+    }
+    // void usage to avoid unused lint when prevX used / not used
+    void prevX;
   };
 
   return (
-    <ScrollView
+    <Animated.ScrollView
+      ref={scrollRef}
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.wrap}
       style={styles.tabsScroll}
+      onScroll={scrollEvent}
+      scrollEventThrottle={16}
+      onLayout={(e) => setViewportW(e.nativeEvent.layout.width)}
+      onContentSizeChange={(w) => setContentW(w)}
     >
       <Animated.View
         pointerEvents="none"
@@ -100,7 +179,7 @@ export function ServiceTabs() {
           </Pressable>
         );
       })}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 

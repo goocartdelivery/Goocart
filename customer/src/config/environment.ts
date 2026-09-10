@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 // Where the app finds the Goocart backend.
 //
@@ -72,3 +73,23 @@ const resolved = resolve();
 export const API_URL = resolved.url;
 export const apiConfigError = resolved.error;
 export const API_TIMEOUT_MS = 12000;
+
+// Whether React Native Maps can actually render on this device/build.
+// Android maps and PROVIDER_GOOGLE always need a real, restricted Google Maps
+// SDK key baked into the manifest at build time (see app.config.js) — with a
+// missing or placeholder key the native map renders blank. iOS uses the
+// default Apple Maps provider and needs no key, and Expo Go ships its own
+// key, so both always work. Screens gate on this before rendering a map so a
+// build that can't draw one shows an actionable message instead of a dead
+// gray rectangle.
+export function mapsSupportedInThisBuild(): boolean {
+  if (Platform.OS !== "android") return true;
+  if (Constants.executionEnvironment === Constants.ExecutionEnvironment.StoreClient) return true;
+  const googleMaps = (
+    Constants.expoConfig?.android as
+      | { config?: { googleMaps?: { apiKey?: string } } }
+      | undefined
+  )?.config?.googleMaps;
+  const key = googleMaps?.apiKey;
+  return Boolean(key && !/^REPLACE_WITH|^(YOUR_|TODO|PLACEHOLDER)/i.test(key));
+}

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Brand } from "@/components/Brand";
+import { LocationStatusBar } from "@/components/LocationStatusBar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { colors, radius, spacing, typography } from "@/theme";
 import { DEMO_LOCATIONS, useLocationStore } from "@/store/useLocationStore";
@@ -11,15 +12,24 @@ import { useAuthStore } from "@/store/useAuthStore";
 export default function LocationScreen() {
   const [error, setError] = useState("");
   const isResolving = useLocationStore((s) => s.isResolving);
-  const resolveCurrentLocation = useLocationStore((s) => s.resolveCurrentLocation);
+  const selected = useLocationStore((s) => s.selected);
+  const detectCurrentLocation = useLocationStore((s) => s.detectCurrentLocation);
   const chooseLocation = useLocationStore((s) => s.chooseLocation);
   const user = useAuthStore((s) => s.user);
+
+  // Auto-start detection on first arrival (no manual button press needed) —
+  // non-blocking: the screen renders immediately and the status pill shows
+  // fetching → delivering-to / unavailable.
+  useEffect(() => {
+    const state = useLocationStore.getState();
+    if (!state.selected) void state.detectCurrentLocation();
+  }, []);
 
   const proceed = () => router.replace(user ? "/(tabs)/home" : "/login");
 
   const onUseCurrentLocation = async () => {
     setError("");
-    const ok = await resolveCurrentLocation();
+    const ok = await detectCurrentLocation(true);
     if (ok) proceed();
     else setError("Couldn't access your location. Choose a location below instead.");
   };
@@ -32,7 +42,13 @@ export default function LocationScreen() {
         <Text style={styles.copy}>We use this to show restaurants, stores and delivery times near you.</Text>
       </View>
 
-      <PrimaryButton label="Use current location" onPress={() => void onUseCurrentLocation()} loading={isResolving} />
+      <LocationStatusBar />
+
+      <PrimaryButton
+        label={selected ? "Continue" : "Use current location"}
+        onPress={() => void onUseCurrentLocation()}
+        loading={isResolving}
+      />
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Text style={styles.orLabel}>OR CHOOSE A LOCATION</Text>

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import { connectDb, dbName, disconnectDb } from "./lib/db.js";
+import { hashPassword } from "./lib/auth.js";
 import { Coupon, FoodItem, PricingRule, Product, Restaurant, Role, ServiceConfig, User } from "./models.js";
 import { SEED_RESTAURANTS, SEED_FOOD_ITEMS, SEED_COUPONS, SEED_ROLES, SEED_PRICING, SEED_PRODUCTS, SERVICES } from "./seedData.js";
 
@@ -81,9 +82,17 @@ async function seed(): Promise<void> {
   }
   console.log(`pricing rules  ${SEED_PRICING.length}`);
 
+  const platformStorePassword = await hashPassword("Goocart@123");
   const platformStore = await User.findOneAndUpdate(
     { email: "platform-store@goocart.local" },
-    { $set: { name: "Goocart Local Store", role: "VENDOR_OWNER", status: "ACTIVE" } },
+    {
+      $set: {
+        name: "Goocart Local Store",
+        role: "VENDOR_OWNER",
+        status: "ACTIVE",
+        passwordHash: platformStorePassword,
+      },
+    },
     { upsert: true, new: true },
   );
   for (const product of SEED_PRODUCTS) {
@@ -94,6 +103,25 @@ async function seed(): Promise<void> {
     );
   }
   console.log(`service items  ${SEED_PRODUCTS.length}`);
+
+  const vendorOwnerPassword = await hashPassword("Goocart@123");
+  const paradiseOwner = await User.findOneAndUpdate(
+    { email: "vendor@goocart.com" },
+    {
+      $set: {
+        name: "Paradise Biryani Owner",
+        role: "VENDOR_OWNER",
+        status: "ACTIVE",
+        passwordHash: vendorOwnerPassword,
+        vendorId: restaurantIdBySlug.get("r1"),
+        vendorPermissions: ["product.manage_own", "order.manage_own_vendor"],
+        isPrimaryOwner: true,
+        staffTitle: "Owner",
+      },
+    },
+    { upsert: true, new: true },
+  );
+  console.log(`vendor login   vendor@goocart.com / Goocart@123`);
 
   for (const c of SEED_COUPONS) {
     await Coupon.findOneAndUpdate({ code: c.code }, { $set: c }, { upsert: true });

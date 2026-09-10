@@ -29,6 +29,10 @@ export default function RootLayout() {
     void usePricingStore.getState().load();
     void useCartStore.getState().hydrate();
     void useStoreCartStore.getState().hydrate();
+    // Silent, non-blocking location refresh for returning users: shows the
+    // cached location immediately and updates "Delivering to" in the
+    // background when they've moved. No permission prompt, never errors.
+    void useLocationStore.getState().refreshCurrentLocation();
     return initNotificationDeepLinking();
   }, []);
 

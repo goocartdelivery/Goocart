@@ -23,6 +23,7 @@ export type HomeCategory = {
   key: string;
   label: string;
   imageUrl?: string;
+  image?: ImageSourcePropType;
   emoji?: string;
   accent?: string;
   keywords: string[];
@@ -70,21 +71,21 @@ export const HOME_RAW_CATEGORIES: Record<"food" | "grocery" | "vegetables" | "ma
     { key: "rolls", label: "Rolls", keywords: ["wrap", "roll", "shawarma", "kebab"] },
   ],
   grocery: [
-    { key: "dairy", label: "Dairy & Milk", emoji: "🥛", accent: "#E8F7ED", keywords: ["milk", "curd", "butter", "paneer", "cheese", "yogurt", "ghee"] },
-    { key: "fruits", label: "Fruits", emoji: "🍎", accent: "#FFF0E8", keywords: ["apple", "banana", "mango", "orange", "grape", "papaya", "watermelon"] },
-    { key: "vegetables", label: "Vegetables", emoji: "🥦", accent: "#EEF8DF", keywords: ["tomato", "onion", "potato", "carrot", "cabbage", "brinjal"] },
-    { key: "atta", label: "Atta & Flour", emoji: "🌾", accent: "#FFF4D8", keywords: ["atta", "flour", "maida", "besan", "sooji"] },
-    { key: "rice", label: "Rice & Grains", emoji: "🍚", accent: "#FFF4D8", keywords: ["rice", "bajra", "jowar", "oats"] },
-    { key: "pulses", label: "Pulses", emoji: "🫘", accent: "#FDE7D8", keywords: ["dal", "moong", "masoor", "chana", "toor", "urad"] },
-    { key: "oil", label: "Cooking Oil", emoji: "🫗", accent: "#FFF4D8", keywords: ["oil", "sunflower", "groundnut", "mustard"] },
-    { key: "spices", label: "Spices", emoji: "🌶️", accent: "#FDE7D8", keywords: ["masala", "turmeric", "chilli", "salt", "cumin", "garam"] },
-    { key: "snacks", label: "Snacks", emoji: "🍿", accent: "#FFF0E8", keywords: ["chips", "namkeen", "bhujia", "kurkure", "wafers"] },
-    { key: "biscuits", label: "Biscuits", emoji: "🍪", accent: "#FFF8E1", keywords: ["biscuit", "cookie", "marie", "parle", "bourbon"] },
+    { key: "dairy", label: "Dairy & Milk", emoji: "🥛", accent: "#E8F7ED", image: require("../../assets/images/dairy&milk.webp"), keywords: ["milk", "curd", "butter", "paneer", "cheese", "yogurt", "ghee"] },
+    { key: "fruits", label: "Fruits", emoji: "🍎", accent: "#FFF0E8", image: require("../../assets/images/fruits.webp"), keywords: ["apple", "banana", "mango", "orange", "grape", "papaya", "watermelon"] },
+    { key: "vegetables", label: "Vegetables", emoji: "🥦", accent: "#EEF8DF", image: require("../../assets/images/vegatables.webp"), keywords: ["tomato", "onion", "potato", "carrot", "cabbage", "brinjal"] },
+    { key: "atta", label: "Atta & Flour", emoji: "🌾", accent: "#FFF4D8", image: require("../../assets/images/attaa.webp"), keywords: ["atta", "flour", "maida", "besan", "sooji"] },
+    { key: "rice", label: "Rice & Grains", emoji: "🍚", accent: "#FFF4D8", image: require("../../assets/images/rice.webp"), keywords: ["rice", "bajra", "jowar", "oats"] },
+    { key: "pulses", label: "Pulses", emoji: "🫘", accent: "#FDE7D8", image: require("../../assets/images/pulses.webp"), keywords: ["dal", "moong", "masoor", "chana", "toor", "urad"] },
+    { key: "oil", label: "Cooking Oil", emoji: "🫗", accent: "#FFF4D8", image: require("../../assets/images/cookingOil.webp"), keywords: ["oil", "sunflower", "groundnut", "mustard"] },
+    { key: "spices", label: "Spices", emoji: "🌶️", accent: "#FDE7D8", image: require("../../assets/images/spices.webp"), keywords: ["masala", "turmeric", "chilli", "salt", "cumin", "garam"] },
+    { key: "snacks", label: "Snacks", emoji: "🍿", accent: "#FFF0E8", image: require("../../assets/images/snacks.webp"), keywords: ["chips", "namkeen", "bhujia", "kurkure", "wafers"] },
+    { key: "biscuits", label: "Biscuits", emoji: "🍪", accent: "#FFF8E1", image: require("../../assets/images/buiskits.webp"), keywords: ["biscuit", "cookie", "marie", "parle", "bourbon"] },
     { key: "beverages", label: "Beverages", emoji: "🧃", accent: "#E8F7ED", keywords: ["coffee", "tea", "juice", "cola", "soda", "water"] },
     { key: "breakfast", label: "Breakfast", emoji: "🥣", accent: "#FFF8E1", keywords: ["corn", "flakes", "poha", "upma", "bread", "oats"] },
-    { key: "bakery", label: "Bakery", emoji: "🥖", accent: "#FFE9D6", keywords: ["bread", "cake", "bun", "rusk", "pav"] },
-    { key: "frozen", label: "Frozen Foods", emoji: "🧊", accent: "#E4F3FB", keywords: ["ice cream", "frozen", "nuggets", "samosa"] },
-    { key: "cleaning", label: "Cleaning", emoji: "🧴", accent: "#E4F3FB", keywords: ["detergent", "clean", "dishwash", "surface", "floor"] },
+    { key: "bakery", label: "Bakery", emoji: "🥖", accent: "#FFE9D6", image: require("../../assets/images/backery.webp"), keywords: ["bread", "cake", "bun", "rusk", "pav"] },
+    { key: "frozen", label: "Frozen Foods", emoji: "🧊", accent: "#E4F3FB", image: require("../../assets/images/frozenfoods.png"), keywords: ["ice cream", "frozen", "nuggets", "samosa"] },
+    { key: "cleaning", label: "Cleaning", emoji: "🧴", accent: "#E4F3FB", image: require("../../assets/images/cleaning.webp"), keywords: ["detergent", "clean", "dishwash", "surface", "floor"] },
     { key: "personal", label: "Personal Care", emoji: "🧼", accent: "#F3E8FF", keywords: ["shampoo", "soap", "toothpaste", "cream", "lotion"] },
     { key: "baby", label: "Baby Care", emoji: "🍼", accent: "#FFE9F1", keywords: ["diaper", "baby", "wipes"] },
     { key: "pet", label: "Pet Supplies", emoji: "🐾", accent: "#E8F7ED", keywords: ["pet", "dog", "cat", "food"] },
@@ -92,8 +93,8 @@ export const HOME_RAW_CATEGORIES: Record<"food" | "grocery" | "vegetables" | "ma
   vegetables: [
     { key: "leafy", label: "Leafy Vegetables", emoji: "🥬", accent: "#E8F7ED", keywords: ["spinach", "palak", "coriander", "methi", "lettuce", "amaranth"] },
     { key: "root", label: "Root Vegetables", emoji: "🥔", accent: "#FFF4D8", keywords: ["potato", "carrot", "radish", "beetroot", "turnip"] },
-    { key: "fruits", label: "Fresh Fruits", emoji: "🍎", accent: "#FFF0E8", keywords: ["apple", "banana", "mango", "orange", "grapes", "papaya", "guava"] },
-    { key: "exotic", label: "Exotic Vegetables", emoji: "🥦", accent: "#F3E8FF", keywords: ["broccoli", "capsicum", "zucchini", "mushroom", "corn"] },
+    { key: "fruits", label: "Fresh Fruits", emoji: "🍎", accent: "#FFF0E8", image: require("../../assets/images/fruits.webp"), keywords: ["apple", "banana", "mango", "orange", "grapes", "papaya", "guava"] },
+    { key: "exotic", label: "Exotic Vegetables", emoji: "🥦", accent: "#F3E8FF", image: require("../../assets/images/vegatables.webp"), keywords: ["broccoli", "capsicum", "zucchini", "mushroom", "corn"] },
     { key: "herbs", label: "Herbs", emoji: "🌿", accent: "#E8F7ED", keywords: ["mint", "basil", "thyme", "rosemary", "curry leaves"] },
     { key: "organic", label: "Organic Produce", emoji: "🌱", accent: "#DCFCE7", keywords: ["organic", "natural", "fresh"] },
   ],
@@ -229,7 +230,7 @@ export const SERVICE_CONFIGS: Record<ServiceType, ServiceConfig> = {
     kind: "products",
     tabLabel: "Mart",
     theme: {
-      primary: "#7C3AED",
+      primary: "#8535F6",
       primaryMuted: "#EDE9FE",
       onPrimary: "#FFFFFF",
       gradient: ["#8B5CF6", "#7C3AED"],

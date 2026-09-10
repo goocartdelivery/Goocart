@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { useStoreCartBill, useStoreCartItemCount } from "@/store/useStoreCartStore";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -13,11 +13,16 @@ const ACCENT = "#16A34A";
 export function GroceryStickyCartBar({ bottomOffset = 0 }: Props) {
   const count = useStoreCartItemCount();
   const bill = useStoreCartBill();
+  const pathname = usePathname();
 
   const [prevCount, setPrevCount] = useState(count);
   const [anim] = useState(() => new Animated.Value(0));
 
-  const visible = count > 0;
+  // This bar is mounted by the persistent tabs layout, which stays alive while
+  // the user switches tabs — so without route awareness it would keep floating
+  // above the Cart screen after "View Cart". Hide it only while the Cart tab
+  // is focused; everywhere else it behaves exactly as before.
+  const visible = count > 0 && pathname !== "/cart";
 
   useEffect(() => {
     const target = visible ? 1 : 0;

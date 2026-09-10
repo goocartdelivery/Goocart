@@ -1,25 +1,44 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 const TOKEN_KEY = "goocart.customer.session.token.v1";
 const LEGACY_KEY = "goocart.auth.v2";
 
+// SecureStore is unavailable on web and throws; fall back to AsyncStorage
+// (localStorage on web) so the app works in a browser too.
+const useSecureStore = Platform.OS !== "web";
+
+async function readTokenStorage(key: string): Promise<string | null> {
+  return useSecureStore ? SecureStore.getItemAsync(key) : AsyncStorage.getItem(key);
+}
+
+async function writeTokenStorage(key: string, value: string): Promise<void> {
+  if (useSecureStore) await SecureStore.setItemAsync(key, value);
+  else await AsyncStorage.setItem(key, value);
+}
+
+async function clearTokenStorage(key: string): Promise<void> {
+  if (useSecureStore) await SecureStore.deleteItemAsync(key);
+  else await AsyncStorage.removeItem(key);
+}
+
 export async function readToken(): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync(TOKEN_KEY);
+    return await readTokenStorage(TOKEN_KEY);
   } catch (e) {
-    console.log("[session] SecureStore read failed:", e instanceof Error ? e.message : e);
+    console.log("[session] token read failed:", e instanceof Error ? e.message : e);
     return null;
   }
 }
 
 export async function writeToken(token: string): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await writeTokenStorage(TOKEN_KEY, token);
 }
 
 export async function clearToken(): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await clearTokenStorage(TOKEN_KEY);
   } catch {
     // Nothing to clear.
   }
@@ -38,10 +57,10 @@ export async function migrateLegacyToken(): Promise<void> {
     const parsed = JSON.parse(raw) as { token?: string; user?: unknown };
     if (!parsed.token) return;
 
-    const existing = await SecureStore.getItemAsync(TOKEN_KEY);
+    const existing = await readTokenStorage(TOKEN_KEY);
     if (!existing) {
-      await SecureStore.setItemAsync(TOKEN_KEY, parsed.token);
-      const verify = await SecureStore.getItemAsync(TOKEN_KEY);
+      await writeTokenStorage(TOKEN_KEY, parsed.token);
+      const verify = await readTokenStorage(TOKEN_KEY);
       if (verify !== parsed.token) throw new Error("SecureStore verification failed after write");
     }
 

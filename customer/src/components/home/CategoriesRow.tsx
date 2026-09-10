@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { HomeCategory } from "@/constants/serviceHome";
 import { colors, spacing, typography } from "@/theme";
 import { RemoteImage } from "@/components/RemoteImage";
@@ -28,6 +28,11 @@ export function CategoriesRow({ categories, selectedKey, onSelect }: Props) {
             {c.imageUrl ? (
               <View style={[styles.photoWrap, selected && styles.selectedRing]}>
                 <RemoteImage uri={c.imageUrl} fallbackLabel={c.label} style={styles.photo} />
+                {selected ? <View style={styles.selectedCheck} /> : null}
+              </View>
+            ) : c.image ? (
+              <View style={[styles.photoWrap, selected && styles.selectedRing]}>
+                <Image source={c.image} style={styles.photo} resizeMode="cover" />
                 {selected ? <View style={styles.selectedCheck} /> : null}
               </View>
             ) : (
