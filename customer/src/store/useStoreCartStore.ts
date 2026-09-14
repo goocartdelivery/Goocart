@@ -9,9 +9,9 @@ import { userStorageKey } from "@/services/userKey";
 // user-scoped key at read/write time so two accounts never share a store cart.
 const STORAGE_BASE = "goocart.storecart.v1";
 
-// The store cart holds products from all three store services (Grocery,
-// Vegetables, Mart) together — they all belong to the GoCart Store and are
-// checked out as one order. Grocery/Veg/Mart are a single store cart domain,
+// The store cart holds products from all store services (Grocery, Vegetables,
+// Mart, Medicine) together — they all belong to the GoCart Store and are
+// checked out as one order. Store services are a single store cart domain,
 // intentionally independent from the FOOD cart.
 export type StoreProductRef = {
   productId: string;
@@ -19,16 +19,18 @@ export type StoreProductRef = {
   name: string;
   imageUrl?: string | null;
   price: number;
+  prescriptionRequired?: boolean;
 };
 
 // Backend `Product.service` is title-cased ("Grocery"); the frontend ServiceType
 // is upper-cased ("GROCERY"). Normalise once so a line never depends on the
 // source casing of the product feed.
-export function normalizeStoreService(service: string): "GROCERY" | "VEGETABLES" | "MART" | "OTHER" {
+export function normalizeStoreService(service: string): "GROCERY" | "VEGETABLES" | "MART" | "MEDICINE" | "OTHER" {
   const key = service.trim().toUpperCase();
   if (key === "GROCERY" || key === "GRO") return "GROCERY";
   if (key === "VEGETABLES" || key === "VEGETABLE" || key === "VEG") return "VEGETABLES";
   if (key === "MART") return "MART";
+  if (key === "MEDICINE" || key === "MED") return "MEDICINE";
   return "OTHER";
 }
 
@@ -37,9 +39,11 @@ function storeLineId(productId: string): string {
 }
 
 // Maps a backend ServiceProduct onto a StoreProductRef so any store product
-// screen (Grocery/Veg/Mart) can hand it straight to the shared store cart.
-export function storeProductRef(p: { id: string; service: string; name: string; imageUrl?: string | null; price: number }): StoreProductRef {
-  return { productId: p.id, service: p.service, name: p.name, imageUrl: p.imageUrl, price: p.price };
+// screen (Grocery/Veg/Mart/Medicine) can hand it straight to the shared store
+// cart. The prescription flag travels with the line so Rx products stay tagged
+// even after a re-add.
+export function storeProductRef(p: { id: string; service: string; name: string; imageUrl?: string | null; price: number; prescriptionRequired?: boolean }): StoreProductRef {
+  return { productId: p.id, service: p.service, name: p.name, imageUrl: p.imageUrl, price: p.price, prescriptionRequired: p.prescriptionRequired ?? false };
 }
 
 type StoreCartState = {
@@ -88,6 +92,7 @@ export const useStoreCartStore = create<StoreCartState>((set, get) => ({
             quantity: 1,
             unitPrice: product.price,
             lineTotal: product.price,
+            prescriptionRequired: product.prescriptionRequired ?? false,
           },
         ];
     set({ items });

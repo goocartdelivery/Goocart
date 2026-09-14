@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { RequireVendor } from "@/components/AuthGates";
 import { DishImageField } from "@/components/DishImageField";
 import { colors, radius, spacing, typography } from "@/theme";
 import { useVendorStore } from "@/store/useVendorStore";
@@ -38,31 +39,33 @@ export default function NewMenuItemScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScreenHeader title="Add dish" />
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <DishImageField value={imageUrl} onChange={setImageUrl} />
-          <Field label="Dish name" value={name} onChangeText={setName} />
-          <Field label="Description" value={description} onChangeText={setDescription} multiline />
-          <Field label="Category" value={categoryKey} onChangeText={setCategoryKey} placeholder="e.g. Starters" />
-          <Field label="Price (₹)" value={price} onChangeText={setPrice} keyboardType="numeric" />
+    <RequireVendor>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ScreenHeader title="Add dish" />
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <DishImageField value={imageUrl} onChange={setImageUrl} />
+            <Field label="Dish name" value={name} onChangeText={setName} />
+            <Field label="Description" value={description} onChangeText={setDescription} multiline />
+            <Field label="Category" value={categoryKey} onChangeText={setCategoryKey} placeholder="e.g. Starters" />
+            <Field label="Price (₹)" value={price} onChangeText={setPrice} keyboardType="numeric" />
 
-          <View style={styles.switchRow}>
-            <Text style={typography.captionStrong}>Vegetarian</Text>
-            <Switch
-              value={veg}
-              onValueChange={setVeg}
-              trackColor={{ false: colors.border, true: colors.successMuted }}
-              thumbColor={veg ? colors.success : colors.surface}
-            />
-          </View>
+            <View style={styles.switchRow}>
+              <Text style={typography.captionStrong}>Vegetarian</Text>
+              <Switch
+                value={veg}
+                onValueChange={setVeg}
+                trackColor={{ false: colors.border, true: colors.successMuted }}
+                thumbColor={veg ? colors.success : colors.surface}
+              />
+            </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <PrimaryButton label={busy ? "Saving…" : "Add to menu"} onPress={() => void submit()} disabled={busy} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <PrimaryButton label={busy ? "Saving…" : "Add to menu"} onPress={() => void submit()} disabled={busy} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </RequireVendor>
   );
 }
 

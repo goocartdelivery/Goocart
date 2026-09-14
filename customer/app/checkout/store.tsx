@@ -32,16 +32,27 @@ export default function StoreCheckoutScreen() {
   const [method, setMethod] = useState<PaymentMethod>("UPI");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [prescriptionProvided, setPrescriptionProvided] = useState(false);
 
   if (!user) return <Redirect href={{ pathname: "/login", params: { returnTo: "/checkout/store" } }} />;
   if (items.length === 0) return <Redirect href="/(tabs)/cart" />;
 
   const address = selectedAddress ?? location;
 
+  // Rx medicines (service "Medicine" with prescriptionRequired) are delivered
+  // only against a valid prescription. The user must attest they hold one —
+  // the server re-checks it and rejects the whole order with
+  // PRESCRIPTION_REQUIRED otherwise, so this flag is never trusted alone.
+  const hasRxItems = items.some((i) => i.prescriptionRequired);
+
   const placeOrder = async () => {
     if (!address) {
       setError("Add or select a delivery address before placing the order.");
       router.push("/checkout/address");
+      return;
+    }
+    if (hasRxItems && !prescriptionProvided) {
+      setError("Prescription medicines in your cart require a valid prescription. Confirm you have one to continue.");
       return;
     }
     setError("");
@@ -53,6 +64,7 @@ export default function StoreCheckoutScreen() {
         tip,
         address,
         paymentMethod: method,
+        prescriptionProvided,
       });
       clear();
       Alert.alert("Order Confirmed", `${order.reference} has been placed for ₹${order.total}.`, [
@@ -93,6 +105,23 @@ export default function StoreCheckoutScreen() {
             </Pressable>
           ))}
         </Section>
+
+        {hasRxItems ? (
+          <View style={styles.section}>
+            <View style={styles.rxHeader}>
+              <Text style={styles.rxTitle}>Rx · Prescription medicines</Text>
+              <Text style={styles.rxCopy}>
+                Your cart contains prescription-only medicines. These are delivered only against a valid prescription.
+              </Text>
+            </View>
+            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: prescriptionProvided }} onPress={() => setPrescriptionProvided((v) => !v)} style={styles.rxRow}>
+              <View style={[styles.rxCheck, prescriptionProvided && styles.rxCheckActive]}>
+                {prescriptionProvided ? <Text style={styles.rxCheckTick}>✓</Text> : null}
+              </View>
+              <Text style={styles.rxRowText}>I have a valid prescription for these medicines.</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <Section title="Bill Details">
           <BillRow label="Item Total" value={bill.itemTotal} />
@@ -151,5 +180,22 @@ const styles = StyleSheet.create({
   radioDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   billRow: { flexDirection: "row", justifyContent: "space-between" },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },
+  rxHeader: { gap: 2 },
+  rxTitle: { fontSize: 12, fontWeight: "800", color: "#0E9F6E", letterSpacing: 0.2 },
+  rxCopy: { ...typography.caption, fontSize: 11, color: "#396053", lineHeight: 15 },
+  rxRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, marginTop: spacing.xs },
+  rxCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: "#0E9F6E",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surface,
+  },
+  rxCheckActive: { backgroundColor: "#0E9F6E" },
+  rxCheckTick: { color: colors.white, fontSize: 14, fontWeight: "900" },
+  rxRowText: { ...typography.body, fontSize: 13, flex: 1 },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
 });

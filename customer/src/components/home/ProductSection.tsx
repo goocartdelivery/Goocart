@@ -1,13 +1,13 @@
 import { useEffect, useMemo } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { router } from "expo-router";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonBlock } from "@/components/SkeletonBlock";
 import { HomeCategory, ServiceConfig } from "@/constants/serviceHome";
 import { matchesCategory, useServiceFavorites, useServiceHomeStore, useServiceProducts } from "@/store/useServiceHomeStore";
-import { storeProductRef, useStoreCartBill, useStoreCartStore } from "@/store/useStoreCartStore";
+import { useProductDetailStore } from "@/store/useProductDetailStore";
+import { storeProductRef, useStoreCartStore } from "@/store/useStoreCartStore";
 import { ServiceProduct } from "@/services/ServiceOrderService";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -26,6 +26,7 @@ export function ProductSection({ config, category }: { config: ServiceConfig; ca
   const loadProducts = useServiceHomeStore((s) => s.loadProducts);
   const favorites = useServiceFavorites(service);
   const toggleFavorite = useServiceHomeStore((s) => s.toggleFavorite);
+  const openProduct = useProductDetailStore((s) => s.open);
 
   // All three store services (Grocery/Veg/Mart) share ONE store cart. Each
   // product is added to that same cart, so moving between the sections (or
@@ -33,8 +34,6 @@ export function ProductSection({ config, category }: { config: ServiceConfig; ca
   const storeItems = useStoreCartStore((s) => s.items);
   const addItem = useStoreCartStore((s) => s.addItem);
   const updateQty = useStoreCartStore((s) => s.updateQty);
-  const storeCount = useStoreCartStore((s) => s.items.reduce((sum, i) => sum + i.quantity, 0));
-  const storeBill = useStoreCartBill();
   const { cardWidth } = useColumns();
 
   useEffect(() => {
@@ -60,7 +59,7 @@ export function ProductSection({ config, category }: { config: ServiceConfig; ca
           </Pressable>
         </View>
       ) : filtered.length === 0 ? (
-        <EmptyState icon="grocery" title={`No ${config.tabLabel.toLowerCase()} items yet`} copy={category ? `Nothing matches "${category.label}" right now.` : "Admin adds live products and stock from the Catalog page."} />
+        <EmptyState icon={service === "MEDICINE" ? "medical" : "grocery"} title={`No ${config.tabLabel.toLowerCase()} items yet`} copy={category ? `Nothing matches "${category.label}" right now.` : "Admin adds live products and stock from the Catalog page."} />
       ) : (
         <View style={styles.grid}>
           {filtered.map((p) => (
@@ -76,27 +75,12 @@ export function ProductSection({ config, category }: { config: ServiceConfig; ca
               }}
               favorite={Boolean(favorites[p.id])}
               onToggleFav={() => toggleFavorite(service, p.id)}
+              onOpen={() => openProduct(p)}
               accent={config.theme.primary}
             />
           ))}
         </View>
       )}
-
-      {storeCount > 0 ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/(tabs)/cart")}
-          style={({ pressed }) => [styles.checkout, pressed && styles.pressed]}
-        >
-          <View>
-            <Text style={styles.checkoutCount}>{storeCount} product{storeCount > 1 ? "s" : ""} in Store Cart</Text>
-            <Text style={styles.checkoutTotal}>₹{storeBill.total}</Text>
-          </View>
-          <View style={[styles.checkoutBtn, { backgroundColor: config.theme.primary }]}>
-            <Text style={styles.checkoutBtnText}>View Cart</Text>
-          </View>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -107,6 +91,7 @@ function ProductCard({
   qty,
   onInc,
   onDec,
+  onOpen,
   favorite,
   onToggleFav,
   accent,
@@ -116,25 +101,33 @@ function ProductCard({
   qty: number;
   onInc: () => void;
   onDec: () => void;
+  onOpen: () => void;
   favorite: boolean;
   onToggleFav: () => void;
   accent: string;
 }) {
   return (
     <View style={[styles.card, { width: cardWidth }]}>
-      <View>
+      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`View ${product.name}`}>
         <RemoteImage uri={product.imageUrl} fallbackLabel={product.name} style={styles.cardImage} contentFit="cover" />
         <Pressable style={styles.favBtn} onPress={onToggleFav} hitSlop={8} accessibilityLabel={favorite ? "Remove from favorites" : "Add to favorites"}>
           <Icon name={favorite ? "heartFilled" : "heart"} size={16} color={favorite ? colors.error : colors.white} />
         </Pressable>
-      </View>
+        {product.prescriptionRequired ? (
+          <View style={styles.rxBadge}>
+            <Text style={styles.rxText}>Rx</Text>
+          </View>
+        ) : null}
+      </Pressable>
       <View style={styles.cardBody}>
-        <Text style={styles.cardName} numberOfLines={2}>
-          {product.name}
-        </Text>
-        <Text style={styles.cardDesc} numberOfLines={1}>
-          {product.vendorName} • {product.description || product.eta}
-        </Text>
+        <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`View details for ${product.name}`}>
+          <Text style={styles.cardName} numberOfLines={2}>
+            {product.name}
+          </Text>
+          <Text style={styles.cardDesc} numberOfLines={1}>
+            {product.vendorName} • {product.description || product.eta}
+          </Text>
+        </Pressable>
         <View style={styles.cardPriceRow}>
           <Text style={[styles.cardPrice, { color: accent }]}>₹{product.price}</Text>
           {qty === 0 ? (
@@ -210,20 +203,16 @@ const styles = StyleSheet.create({
   qtyBtn: { paddingHorizontal: 3, paddingVertical: 2 },
   qtyValue: { fontWeight: "800", fontSize: 13 },
   cardStock: { ...typography.caption, color: colors.success, fontSize: 10 },
+  rxBadge: {
+    position: "absolute",
+    left: 6,
+    top: 6,
+    backgroundColor: "#0E9F6E",
+    borderRadius: radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  rxText: { color: colors.white, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
   errorCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.lg, gap: 4 },
   errorRetry: { ...typography.caption, color: colors.primary, fontWeight: "800" },
-  checkout: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.dark,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginTop: spacing.sm,
-  },
-  pressed: { opacity: 0.85 },
-  checkoutCount: { ...typography.caption, color: "#A1A1AA", fontSize: 11 },
-  checkoutTotal: { color: colors.white, fontSize: 18, fontWeight: "900" },
-  checkoutBtn: { paddingHorizontal: spacing.xl, paddingVertical: 10, borderRadius: radius.md },
-  checkoutBtnText: { color: colors.white, fontSize: 13, fontWeight: "800" },
 });

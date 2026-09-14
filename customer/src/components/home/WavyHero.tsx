@@ -68,6 +68,8 @@ const styles = StyleSheet.create({
   hero: {
     width: "100%",
     overflow: "hidden",
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   bgImage: {
     width: "100%",

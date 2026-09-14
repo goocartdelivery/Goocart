@@ -58,7 +58,5 @@ const styles = StyleSheet.create({
   strip: {
     backgroundColor: colors.surface,
     paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
 });

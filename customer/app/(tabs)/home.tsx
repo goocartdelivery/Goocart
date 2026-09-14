@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Animated, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { WavyHero } from "@/components/home/WavyHero";
 import { ServiceSearch } from "@/components/home/ServiceSearch";
-import { ServiceTabs, ServiceTabsLayoutInfo } from "@/components/home/ServiceTabs";
+import { ServiceTabs } from "@/components/home/ServiceTabs";
 import { ServiceSubcategoryStrip } from "@/components/home/ServiceSubcategoryStrip";
 import { BrandsSection } from "@/components/home/BrandsSection";
 import { OffersSection } from "@/components/home/OffersSection";
@@ -12,6 +12,9 @@ import { StoresSection } from "@/components/home/StoresSection";
 import { ProductSection } from "@/components/home/ProductSection";
 import { JobBookingCard } from "@/components/home/JobBookingCard";
 import { GroceryHomeSections } from "@/components/home/GroceryHomeSections";
+import { MedicineHomeSections } from "@/components/home/MedicineHomeSections";
+import { SubCategoryProductSection } from "@/components/home/SubCategoryProductSection";
+import { FoodDishSection } from "@/components/home/FoodDishSection";
 import { RecentTripsSection } from "@/components/home/RecentTripsSection";
 import { RestaurantCard } from "@/components/RestaurantCard";
 import { RestaurantCardSkeleton } from "@/components/SkeletonBlock";
@@ -31,6 +34,12 @@ import { useServiceHomeStore, useServiceProducts } from "@/store/useServiceHomeS
 import { MOCK_RESTAURANTS, normalizeRestaurantData } from "@/data/restaurantMock";
 import { filterRestaurantsByCategory } from "@/utils/foodFilter";
 import { Restaurant } from "@/types";
+
+// Matches the tab-bar content height in (tabs)/_layout.tsx + estimated sticky
+// cart bar height + gap, used as bottom scroll clearance on product services so
+// the last product card scrolls fully above the fixed store cart bar.
+const TAB_BAR_CONTENT_HEIGHT = 58;
+const STICKY_CART_CLEARANCE = 84;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const clean = hex.replace("#", "");
@@ -64,6 +73,9 @@ const HEADER_COLOR_TRANSITION_MS = 380;
 export default function HomeScreen() {
   const active = useActiveServiceStore((s) => s.active);
   const config = serviceConfig(active);
+
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === "android" ? 8 : 0);
 
   const location = useLocationStore((s) => s.selected);
   const user = useAuthStore((s) => s.user);
@@ -102,44 +114,7 @@ export default function HomeScreen() {
     }
   };
 
-  // Shared animated X for the active pill + header→tab stem. Driven by the
-  // spring inside ServiceTabs (when supplied), so both visuals track the
-  // exact same motion — single source of truth, never desynchronised.
-  const [pillTranslateX] = useState(() => new Animated.Value(0));
 
-  // Horizontal scroll of the tab row (content-space X). The stem lives outside
-  // the row, so it shifts by the same amount to stay glued to the pill even
-  // when the row scrolls (small screens / far tabs).
-  const [tabsScrollX] = useState(() => new Animated.Value(0));
-
-  // Bridge / connection shape layout. Read from ServiceTabs onLayoutInfo.
-  const [tabsLayout, setTabsLayout] = useState<ServiceTabsLayoutInfo[]>([]);
-  const activeInfo = tabsLayout.find((t) => t.type === active);
-  const pillW = activeInfo?.width ?? 76;
-
-  // The beak is a narrow rounded column centered on the pill — never pill width
-  // — so the tab keeps its own card size and the neighbors stay untouched. Its
-  // X must match the pill's OUTER X: pill content-X + row padding − row scroll,
-  // then centered (half-widths).
-  const BEAK_WIDTH = Math.max(34, Math.round(pillW * 0.58));
-  const BEAK_LEFT = spacing.lg + (pillW - BEAK_WIDTH) / 2;
-
-  const stemX = useMemo(
-    () =>
-      Animated.add(
-        Animated.subtract(pillTranslateX, tabsScrollX),
-        BEAK_LEFT,
-      ),
-    [pillTranslateX, tabsScrollX, BEAK_LEFT],
-  );
-
-  // Vertical scroll of the main content. The header→tab connection only reads
-  // correctly while the tab row is at the top; it fades out as it scrolls away.
-  const [scrollY] = useState(() => new Animated.Value(0));
-  const onMainScroll = useMemo(
-    () => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false }),
-    [scrollY],
-  );
 
   // Header color transition. The prev/target colors follow the store's single
   // `active` value (kept here in state — the React-sanctioned "adjust state
@@ -181,21 +156,7 @@ export default function HomeScreen() {
   // color interpolates.
   const headerForeground = pickForegroundColor(config.theme.primary);
 
-  const stemOpacity = useMemo(
-    () => scrollY.interpolate({ inputRange: [0, 64], outputRange: [1, 0], extrapolate: "clamp" }),
-    [scrollY],
-  );
-
-  // Vertical geometry: the pill top sits `spacing.md` (scroll padding) +
-  // `spacing.md` (pill top inside ServiceTabs) below the content's top. The
-  // connector is a slim, symmetric beak hanging DOWN from the header's bottom
-  // edge at the pill's center; it is only as tall as the transparent scroll gap
-  // plus a small underlap that tucks behind the pill's flat top edge, so the
-  // selected tab reads as gently attached to the header — a deliberate, compact
-  // connection instead of a bulky block. No reserved space is added.
-  const SCROLL_TO_PILL = spacing.md + spacing.md;
-  const BEAK_UNDERLAP = 8;
-  const BEAK_HEIGHT = SCROLL_TO_PILL + BEAK_UNDERLAP;
+  const scrollPaddingBottom = config.kind === "products" ? TAB_BAR_CONTENT_HEIGHT + bottomInset + STICKY_CART_CLEARANCE : spacing.xxl;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -243,41 +204,15 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      {/* ===== Header ⇄ active-tab connection =====
-           A slim, symmetric beak hangs from the header's bottom edge, centered
-           on the active pill, and tucks a few px behind the pill's top edge —
-           so the selected tab feels gently attached to the header instead of a
-           bulky block, while inactive tabs stay fully detached. Its X is the
-           pill's own animated X (minus the row's scroll offset, plus the row's
-           padding + centering), so it stays glued to the pill on every screen
-           size. It uses the SAME interpolated color as the header and fades
-           out as the page scrolls, exactly when the tabs row scrolls away. */}
-      <View pointerEvents="none" style={styles.bridgeRow}>
-        <Animated.View
-          style={[
-            styles.stemBeak,
-            {
-              width: BEAK_WIDTH,
-              height: BEAK_HEIGHT,
-              backgroundColor: animatedHeaderColor,
-              opacity: stemOpacity,
-              transform: [{ translateX: stemX }],
-            },
-          ]}
-        />
-      </View>
-
       <Animated.ScrollView
-        onScroll={onMainScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: scrollPaddingBottom }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         stickyHeaderIndices={[1]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.primary} />}
       >
         {/* Main category tabs — scroll away with content */}
-        <ServiceTabs pillTranslateX={pillTranslateX} onScrollX={tabsScrollX} onLayoutInfo={setTabsLayout} />
+        <ServiceTabs />
 
         {/* Per-service subcategory strip. A real direct child at a stable index
             (index 1) so native sticky headers pin it just below the fixed header
@@ -289,8 +224,8 @@ export default function HomeScreen() {
           {/* Full-width banner */}
           <WavyHero config={config} onCta={onHeroCta} />
 
-          {/* Search bar — only for Food / Grocery / Mart; hidden for Taxi / Parcel */}
-          {active === "FOOD" || active === "GROCERY" || active === "MART" || active === "VEGETABLES" ? (
+          {/* Search bar — only for Food / Grocery / Veg / Mart / Medicine; hidden for Taxi / Parcel */}
+          {active === "FOOD" || active === "GROCERY" || active === "MART" || active === "VEGETABLES" || active === "MEDICINE" ? (
             <View style={styles.searchWrap}>
               <ServiceSearch />
             </View>
@@ -385,6 +320,13 @@ function FoodContent({
     [byCategory],
   );
 
+  // A selected subcategory (Biryani/Pizza/…) swaps the content area below the
+  // strip to that subcategory's real dishes (catalog-backed grid). "All"
+  // restores the full food homepage sections.
+  if (selectedCategory) {
+    return <FoodDishSection category={selectedCategory} accent={config.theme.primary} primaryMuted={config.theme.primaryMuted} />;
+  }
+
   return (
     <>
       <View style={styles.section}>
@@ -477,11 +419,22 @@ function ProductContent({
   const products = useServiceProducts(config.type);
 
   useEffect(() => {
-    if (refreshTick > 0) void useServiceHomeStore.getState().loadProducts(config.type, true);
+    void useServiceHomeStore.getState().loadProducts(config.type, refreshTick > 0);
   }, [refreshTick, config.type]);
+
+  // A selected subcategory (Fruits/Dairy/…/Cleaning) swaps the content area
+  // below the strip to that subcategory's real, server-scoped product grid.
+  // "All" restores the full service homepage sections.
+  if (selectedCategory) {
+    return <SubCategoryProductSection config={config} category={selectedCategory} />;
+  }
 
   if (config.type === "GROCERY") {
     return <GroceryHomeSections selectedCategory={selectedCategory} />;
+  }
+
+  if (config.type === "MEDICINE") {
+    return <MedicineHomeSections selectedCategory={selectedCategory} />;
   }
 
   return (
@@ -498,11 +451,8 @@ function ProductContent({
       ) : null}
 
       <View style={styles.section}>
-        <SectionHeader
-          title={selectedCategory ? selectedCategory.label : `Fresh ${config.tabLabel} picks`}
-          subtitle="Pay at checkout \u2022 Live pricing"
-        />
-        <ProductSection config={config} category={selectedCategory} />
+        <SectionHeader title={`Fresh ${config.tabLabel} picks`} subtitle="Pay at checkout \u2022 Live pricing" />
+        <ProductSection config={config} category={null} />
       </View>
 
       <View style={styles.section}>
@@ -568,7 +518,7 @@ function FadeSlide({ trigger, children }: { trigger: string; children: React.Rea
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingTop: spacing.md, paddingBottom: spacing.xxl, gap: spacing.lg },
+  scroll: { paddingTop: spacing.md, paddingBottom: spacing.xxl, gap: spacing.md },
 
   // -------- Header --------
   header: {
@@ -576,9 +526,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.surface,
     gap: spacing.md,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 4,
   },
   locationWrap: { flex: 1, flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, minWidth: 0 },
   locationPin: {
@@ -618,27 +571,13 @@ const styles = StyleSheet.create({
   },
   profileText: { color: colors.white, fontSize: 15, fontWeight: "800" },
 
-  // -------- Header ⇄ active tab connection --------
-  bridgeRow: { position: "relative" },
-  stemBeak: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-
   // -------- Search + Veg --------
-  searchWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  searchWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   sectionHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    flexWrap: "wrap",
-    rowGap: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
   vegToggleWrap: {
@@ -664,7 +603,7 @@ const styles = StyleSheet.create({
 
   // -------- Sections --------
   section: { gap: spacing.md },
-  popularSection: { gap: spacing.md, paddingTop: spacing.xl },
+  popularSection: { gap: spacing.sm, paddingTop: spacing.lg },
   hScroll: { gap: spacing.md, paddingHorizontal: spacing.lg },
   offlineCard: {
     backgroundColor: colors.surface,

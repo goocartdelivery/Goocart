@@ -37,6 +37,7 @@ function byRatingDesc(a: ServiceProduct, b: ServiceProduct) {
 export function GroceryHomeSections({ selectedCategory: _selectedCategory }: Props) {
   const products = useServiceProducts(SERVICE);
   const state = useServiceHomeStore((s) => s.productsState[SERVICE] ?? "idle");
+  const errorMessage = useServiceHomeStore((s) => s.productsError[SERVICE]);
   const loadProducts = useServiceHomeStore((s) => s.loadProducts);
   const setCategory = useCategorySelectionStore((s) => s.setCategory);
 
@@ -84,6 +85,7 @@ export function GroceryHomeSections({ selectedCategory: _selectedCategory }: Pro
     return (
       <View style={styles.errorCard}>
         <Text style={typography.bodyStrong}>Couldn\u2019t load grocery products</Text>
+        {errorMessage ? <Text style={styles.errorDetail}>{errorMessage}</Text> : null}
         <Pressable onPress={() => void loadProducts(SERVICE, true)} accessibilityRole="button">
           <Text style={styles.retry}>Tap to retry</Text>
         </Pressable>
@@ -166,4 +168,5 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   retry: { ...typography.caption, color: colors.primary, fontWeight: "800" },
+  errorDetail: { ...typography.caption, color: colors.error, fontSize: 10.5 },
 });

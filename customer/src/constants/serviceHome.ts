@@ -57,7 +57,7 @@ function foodCategories(): HomeCategory[] {
   }));
 }
 
-export const HOME_RAW_CATEGORIES: Record<"food" | "grocery" | "vegetables" | "mart", HomeCategory[]> = {
+export const HOME_RAW_CATEGORIES: Record<"food" | "grocery" | "vegetables" | "mart" | "medicine", HomeCategory[]> = {
   food: [
     { key: "biryani", label: "Biryani", keywords: ["biryani", "rice", "mandi", "dum"] },
     { key: "pizza", label: "Pizza", keywords: ["pizza", "garlic bread"] },
@@ -110,6 +110,17 @@ export const HOME_RAW_CATEGORIES: Record<"food" | "grocery" | "vegetables" | "ma
     { key: "baby", label: "Baby Care", emoji: "🍼", accent: "#FFE9F1", keywords: ["diaper", "baby", "wipes"] },
     { key: "pet", label: "Pet Supplies", emoji: "🐾", accent: "#E8F7ED", keywords: ["pet", "dog", "cat", "food"] },
   ],
+  medicine: [
+    { key: "prescription-medicines", label: "Prescription", emoji: "💊", accent: "#E8F7ED", keywords: ["amoxicillin", "azithromycin", "diclofenac", "prescription"] },
+    { key: "pain-relief", label: "Pain Relief", emoji: "🤕", accent: "#FFE9F1", keywords: ["paracetamol", "ibuprofen", "combiflam", "volini", "moov", "pain"] },
+    { key: "cold-flu", label: "Cold & Flu", emoji: "🤧", accent: "#E4F3FB", keywords: ["cetirizine", "cough", "vaporub", "vaporizer", "lozenge", "vicks"] },
+    { key: "vitamins-supplements", label: "Vitamins", emoji: "🍊", accent: "#FFF8E1", keywords: ["vitamin", "zincovit", "neurobion", "omega", "calcium", "chewable"] },
+    { key: "diabetes-care", label: "Diabetes", emoji: "🩸", accent: "#FFF0E8", keywords: ["metformin", "glimepiride", "glucometer", "strips", "diabetes"] },
+    { key: "personal-care", label: "Personal Care", emoji: "🧴", accent: "#F3E8FF", keywords: ["dettol", "savlon", "electral", "iodex", "ors", "antiseptic"] },
+    { key: "baby-care", label: "Baby Care", emoji: "🍼", accent: "#FFE9F1", keywords: ["calamine", "wipes", "gripe", "diaper"] },
+    { key: "first-aid", label: "First Aid", emoji: "🩹", accent: "#E4F3FB", keywords: ["band-aid", "gauze", "tape", "betadine", "first aid"] },
+    { key: "healthcare-devices", label: "Devices", emoji: "🌡️", accent: "#E8F7ED", keywords: ["thermometer", "oximeter", "monitor", "nebulizer", "glucometer"] },
+  ],
 };
 
 export const HOME_BRANDS: Record<ServiceType, ServiceBrand[]> = {
@@ -144,6 +155,14 @@ export const HOME_BRANDS: Record<ServiceType, ServiceBrand[]> = {
     { name: "Real", emoji: "🧃", color: "#EA580C" },
     { name: "Bru", emoji: "☕", color: "#7C3AED" },
     { name: "Pampers", emoji: "🍼", color: "#F59E0B" },
+  ],
+  MEDICINE: [
+    { name: "Crocin", emoji: "💊", color: "#0E9F6E" },
+    { name: "Dettol", emoji: "🧴", color: "#2563EB" },
+    { name: "Vicks", emoji: "🤧", color: "#7C3AED" },
+    { name: "Savlon", emoji: "🧼", color: "#DC2626" },
+    { name: "One Touch", emoji: "🩸", color: "#EA580C" },
+    { name: "Accu-Chek", emoji: "📟", color: "#16A34A" },
   ],
   BIKE_TAXI: [],
   PARCEL: [],
@@ -249,6 +268,30 @@ export const SERVICE_CONFIGS: Record<ServiceType, ServiceConfig> = {
     searchPlaceholder: "Search for Bread, Soap, Detergent...",
     categories: HOME_RAW_CATEGORIES.mart,
     brands: HOME_BRANDS.MART,
+  },
+  MEDICINE: {
+    type: "MEDICINE",
+    kind: "products",
+    tabLabel: "Medicine",
+    theme: {
+      primary: "#0E9F6E",
+      primaryMuted: "#E6F7F1",
+      onPrimary: "#FFFFFF",
+      gradient: ["#10B981", "#0E9F6E"],
+      gradientDeep: "#078A5C",
+      accent: "#34D399",
+      accentSoft: "#D1FAE5",
+    },
+    hero: {
+      kicker: "100% GENUINE MEDICINES",
+      title: "Medicines delivered to your doorstep.",
+      subtitle: "Everyday health, wellness and pharmacy essentials — delivered fast and safe.",
+      ctaLabel: "Order medicines",
+      emoji: "💊",
+    },
+    searchPlaceholder: "Search for Calpol, Dolo, ORS...",
+    categories: HOME_RAW_CATEGORIES.medicine,
+    brands: HOME_BRANDS.MEDICINE,
   },
   BIKE_TAXI: {
     type: "BIKE_TAXI",

@@ -37,6 +37,7 @@ export const ICONS = {
   grocery: "basket-outline",
   vegetables: "leaf-outline",
   mart: "storefront-outline",
+  medical: "medical-outline",
   empty: "file-tray-outline",
   mic: "mic-outline",
   grid: "grid-outline",

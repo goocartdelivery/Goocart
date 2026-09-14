@@ -7,7 +7,7 @@ import { colors, radius, spacing, typography } from "@/theme";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useVendorStore } from "@/store/useVendorStore";
 
-export default function AccountScreen() {
+export default function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const restaurant = useVendorStore((s) => s.restaurant);
@@ -15,7 +15,7 @@ export default function AccountScreen() {
 
   const signOut = async () => {
     await logout();
-    router.replace("/login");
+    router.replace("/welcome");
   };
 
   const initials = (user?.name ?? "V")
@@ -30,7 +30,7 @@ export default function AccountScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={typography.h1}>Account</Text>
+        <Text style={typography.h1}>Profile</Text>
       </View>
 
       {/* Restaurant header */}

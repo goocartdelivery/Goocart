@@ -9,12 +9,14 @@ const SERVICE_LABEL: Record<StoreCartLineItem["service"], string> = {
   GROCERY: "Grocery",
   VEGETABLES: "Veg",
   MART: "Mart",
+  MEDICINE: "Medicine",
 };
 
 const SERVICE_COLOR: Record<StoreCartLineItem["service"], string> = {
   GROCERY: "#B45309",
   VEGETABLES: colors.success,
   MART: "#0369A1",
+  MEDICINE: "#0E9F6E",
 };
 
 type Props = {
@@ -41,7 +43,7 @@ export function StoreCartSection({ items, bill, onInc, onDec, onRemove, onClear,
       </View>
 
       <View style={styles.chips}>
-        {(["GROCERY", "VEGETABLES", "MART"] as const).map((s) => {
+        {(["GROCERY", "VEGETABLES", "MART", "MEDICINE"] as const).map((s) => {
           const count = items.filter((i) => i.service === s).reduce((sum, i) => sum + i.quantity, 0);
           if (count === 0) return null;
           return (
@@ -64,6 +66,11 @@ export function StoreCartSection({ items, bill, onInc, onDec, onRemove, onClear,
                 </Text>
               </View>
               <Text style={styles.serviceTag}>{SERVICE_LABEL[item.service]}</Text>
+              {item.prescriptionRequired ? (
+                <View style={styles.rxBadge}>
+                  <Text style={styles.rxText}>Rx · PRESCRIPTION REQUIRED</Text>
+                </View>
+              ) : null}
               <Text style={styles.unitPrice}>₹{item.unitPrice}</Text>
             </View>
             <View style={styles.actions}>
@@ -148,6 +155,15 @@ const styles = StyleSheet.create({
   serviceDot: { fontSize: 8 },
   name: { ...typography.bodyStrong, flex: 1 },
   serviceTag: { ...typography.caption, fontSize: 10 },
+  rxBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#D1FAE5",
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    marginTop: 2,
+  },
+  rxText: { fontSize: 9, fontWeight: "800", color: "#0E9F6E", letterSpacing: 0.2 },
   unitPrice: { ...typography.caption, fontWeight: "700", marginTop: 2 },
   actions: { alignItems: "flex-end", gap: spacing.sm },
   removeBtn: {

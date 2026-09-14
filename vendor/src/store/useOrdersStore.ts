@@ -11,6 +11,11 @@ type OrdersState = {
   clear: () => void;
 };
 
+// Realtime events (order:new, order:update) and the 6s poll can fire at the
+// same instant; funnelling concurrent refreshes through one in-flight promise
+// avoids overlapping snapshot requests racing each other.
+let refreshInFlight: Promise<void> | null = null;
+
 // GET /api/v1/orders is already scoped server-side to this vendor's owned
 // restaurant(s) — this store is just a cache of that response.
 export const useOrdersStore = create<OrdersState>((set, get) => ({
@@ -19,13 +24,19 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   error: null,
 
   refresh: async () => {
+    if (refreshInFlight) return refreshInFlight;
     set({ loading: true, error: null });
-    try {
-      const data = await apiGet<{ orders: FoodOrder[] }>("/api/v1/orders");
-      set({ orders: data.orders, loading: false });
-    } catch (e) {
-      set({ loading: false, error: e instanceof Error ? e.message : "Couldn't load orders" });
-    }
+    refreshInFlight = (async () => {
+      try {
+        const data = await apiGet<{ orders: FoodOrder[] }>("/api/v1/orders");
+        set({ orders: data.orders, loading: false });
+      } catch (e) {
+        set({ loading: false, error: e instanceof Error ? e.message : "Couldn't load orders" });
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+    return refreshInFlight;
   },
 
   transition: async (id, to) => {

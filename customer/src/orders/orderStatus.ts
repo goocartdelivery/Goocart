@@ -16,9 +16,9 @@ import { FoodOrder, FoodOrderStatus, TERMINAL_ORDER_STATUSES } from "@/types";
 
 // Food statuses that mean "the order will not proceed" (mirrors
 // TERMINAL_STATUSES server-side, excluding a successful DELIVERED).
-export const FOOD_FAILED_STATUSES: FoodOrderStatus[] = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED"];
+export const FOOD_FAILED_STATUSES: FoodOrderStatus[] = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED", "EXPIRED"];
 
-export type OrderBucket = "ongoing" | "completed" | "cancelled";
+export type OrderBucket = "ongoing" | "ready" | "completed" | "cancelled";
 
 // A customer may cancel a FOOD order while it is PLACED, VENDOR_ACCEPTED,
 // PREPARING, or waiting for a delivery partner (READY_FOR_PICKUP with no
@@ -88,6 +88,7 @@ export const FOOD_STATUS_LABEL: Record<FoodOrderStatus, string> = {
   CANCELLED_BY_CUSTOMER: "Cancelled by You",
   CANCELLED_BY_ADMIN: "Cancelled by Goocart",
   AUTO_CANCELLED: "Cancelled — No partner available",
+  EXPIRED: "Expired — No response",
 };
 
 // Human step labels for the food stepper (sub-set of the above but worded for
@@ -109,6 +110,7 @@ export const FOOD_STEP_LABEL: Record<FoodOrderStatus, string> = {
   CANCELLED_BY_CUSTOMER: "Cancelled",
   CANCELLED_BY_ADMIN: "Cancelled",
   AUTO_CANCELLED: "Cancelled",
+  EXPIRED: "Expired",
 };
 
 export const SERVICE_STATUS_LABEL: Record<string, string> = {
@@ -135,7 +137,7 @@ export function orderStatusLabel(status: string): string {
 }
 
 export function isFoodTerminal(status: FoodOrderStatus): boolean {
-  return TERMINAL_ORDER_STATUSES.includes(status);
+  return (TERMINAL_ORDER_STATUSES as readonly string[]).includes(status);
 }
 
 export function isFoodCancelled(status: FoodOrderStatus): boolean {
@@ -144,6 +146,14 @@ export function isFoodCancelled(status: FoodOrderStatus): boolean {
 
 export function isFoodOngoing(status: FoodOrderStatus): boolean {
   return !isFoodTerminal(status) && status !== "DELIVERED" && !isFoodCancelled(status);
+}
+
+export function isFoodReady(status: FoodOrderStatus): boolean {
+  return status === "READY_FOR_PICKUP";
+}
+
+export function isServiceReady(status: string): boolean {
+  return status === "READY_FOR_PICKUP";
 }
 
 export function isServiceOngoing(status: string): boolean {

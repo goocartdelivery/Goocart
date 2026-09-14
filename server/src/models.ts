@@ -418,6 +418,8 @@ const orderSchema = new Schema(
 );
 orderSchema.index({ customerId: 1, createdAt: -1 });
 orderSchema.index({ restaurantId: 1, status: 1 });
+// Backs the vendor dashboard today/month/lifetime range aggregations.
+orderSchema.index({ restaurantId: 1, createdAt: -1 });
 orderSchema.index({ deliveryOfferStatus: 1, deliveryOfferExpiresAt: 1 });
 // A partial unique index, not a sparse one: for a COMPOUND index, "sparse"
 // only excludes a document that is missing every indexed field, and
@@ -487,12 +489,26 @@ const productSchema = new Schema(
     description: { type: String, default: "" },
     imageUrl: { type: String, default: null },
     price: { type: Number, required: true, min: 0 },
+    // Selling price is `price`; `mrp` (when set) is the listed/reference
+    // price the customer's strikethrough and discount badge are derived from.
+    mrp: { type: Number, default: null, min: 0 },
+    unit: { type: String, default: "" },
+    // Subcategory key — aligned with the app's HOME_RAW_CATEGORIES (e.g.
+    // "fruits", "dairy", "leafy", "household", "pain-relief"). Empty means
+    // "misc/unlisted".
+    category: { type: String, default: "", index: true },
+    // Prescription medicines (service "Medicine") are delivered only against a
+    // valid prescription. The customer store-order flow enforces this
+    // server-side (requires prescriptionProvided attestation), never trusts a
+    // client-side flag to skip it.
+    prescriptionRequired: { type: Boolean, default: false },
     stock: { type: Number, required: true, default: 0, min: 0 },
     rating: { type: Number, default: 0 },
     eta: { type: String, default: "30–45 min" },
   },
   opts,
 );
+productSchema.index({ service: 1, category: 1 });
 
 // A home-screen promo carousel admin can manage directly — distinct from
 // Coupon, which is a functional discount code rather than a display banner.

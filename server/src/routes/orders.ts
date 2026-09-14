@@ -38,7 +38,7 @@ async function resolveVendorAutomation(restaurant: any): Promise<{ mode: "MANUAL
 
   const activeCount = await Order.countDocuments({
     restaurantId: restaurant._id,
-    status: { $nin: ["DELIVERED", "VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED"] },
+    status: { $nin: ["DELIVERED", "VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED", "EXPIRED"] },
   });
   const maxActive = Number(restaurant.maxSimultaneousOrders ?? settings.vendor.defaultMaxSimultaneousOrders);
   const maxQueue = Number(restaurant.maximumQueue ?? settings.vendor.defaultMaximumQueue);
@@ -356,6 +356,16 @@ ordersRouter.post("/:id/transition", requireAuth, async (req: AuthedRequest, res
       }
     }
 
+    // A manual-acceptance order can only be accepted/rejected while the
+    // acceptance window is still open. After the deadline the order is no
+    // longer available (the acceptance watchdog also expires it, but this
+    // guard closes the race before the next sweep).
+    if (group === "vendor" && from === "PLACED" && (to === "VENDOR_ACCEPTED" || to === "VENDOR_REJECTED")) {
+      if (order.manualAcceptanceRequired && order.manualAcceptanceDeadlineAt && new Date(order.manualAcceptanceDeadlineAt).getTime() <= Date.now()) {
+        return res.status(409).json(fail("ORDER_EXPIRED", "This order is no longer available."));
+      }
+    }
+
     // Delivery assignment is the one transition with a real concurrency
     // hazard (multiple partners racing for one job), so it is delegated
     // entirely to claimDelivery()'s atomic guarded update rather than the
@@ -575,6 +585,7 @@ function eventTypeForStatus(status: OrderStatus): string {
     DELIVERED: "ORDER_DELIVERED",
     CANCELLED_BY_ADMIN: "ORDER_CANCELLED",
     CANCELLED_BY_CUSTOMER: "ORDER_CANCELLED",
+    EXPIRED: "ORDER_EXPIRED",
   };
   return map[status] ?? status;
 }
@@ -619,6 +630,7 @@ export function toOrderDTO(o: any, viewer: any) {
     restaurantLongitude: o.restaurantLongitude,
     status: o.status,
     manualAcceptanceRequired: o.manualAcceptanceRequired ?? true,
+    manualAcceptanceDeadlineAt: o.manualAcceptanceDeadlineAt ?? null,
     autoAccepted: Boolean(o.autoAccepted),
     deliveryOfferStatus: o.deliveryOfferStatus ?? "NONE",
     autoCancelDeadlineAt: o.autoCancelDeadlineAt ?? null,

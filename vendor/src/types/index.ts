@@ -131,7 +131,7 @@ export const ORDER_STATUSES = [
   "ARRIVED",
   "DELIVERED",
 ] as const;
-export const TERMINAL_ORDER_STATUSES = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN"] as const;
+export const TERMINAL_ORDER_STATUSES = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED", "EXPIRED"] as const;
 export type FoodOrderStatus = (typeof ORDER_STATUSES)[number] | (typeof TERMINAL_ORDER_STATUSES)[number];
 
 export type OrderStatusEvent = {
@@ -151,6 +151,8 @@ export type FoodOrder = {
   restaurantId: string;
   restaurantName: string;
   restaurantArea: string;
+  restaurantLatitude: number;
+  restaurantLongitude: number;
   items: CartLineItem[];
   deliveryAddress: Address;
   instructions: string[];
@@ -164,6 +166,7 @@ export type FoodOrder = {
   statusHistory: OrderStatusEvent[];
   deliveryPartner: { id: string; name: string | null } | null;
   manualAcceptanceRequired: boolean;
+  manualAcceptanceDeadlineAt: string | null;
   autoAccepted: boolean;
   deliveryOfferStatus: "NONE" | "OFFERING" | "ASSIGNED" | "EXPIRED";
 };

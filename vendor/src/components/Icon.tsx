@@ -13,6 +13,12 @@ export const ICONS = {
   menuActive: "restaurant",
   account: "person-circle-outline",
   accountActive: "person-circle",
+  analytics: "analytics-outline",
+  analyticsActive: "analytics",
+  cash: "cash-outline",
+  notifications: "notifications-outline",
+  location: "location-outline",
+  call: "call",
   back: "chevron-back",
   forward: "chevron-forward",
   add: "add-circle-outline",
@@ -28,6 +34,8 @@ export const ICONS = {
   empty: "file-tray-outline",
   storefront: "storefront-outline",
   image: "image-outline",
+  lock: "lock-closed-outline",
+  arrowBack: "arrow-back",
 } as const;
 
 export type IconName = keyof typeof ICONS;

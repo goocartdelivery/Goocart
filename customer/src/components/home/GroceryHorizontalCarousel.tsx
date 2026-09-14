@@ -5,6 +5,7 @@ import { SkeletonBlock } from "@/components/SkeletonBlock";
 import { ServiceProduct } from "@/services/ServiceOrderService";
 import { storeProductRef, useStoreCartStore } from "@/store/useStoreCartStore";
 import { serviceConfig } from "@/constants/serviceHome";
+import { useProductDetailStore } from "@/store/useProductDetailStore";
 import { spacing } from "@/theme";
 
 type Props = {
@@ -27,6 +28,7 @@ export function GroceryHorizontalCarousel({ title, products, loading, accent, on
   const addItem = useStoreCartStore((s) => s.addItem);
   const updateQty = useStoreCartStore((s) => s.updateQty);
   const groceryAccent = accent ?? serviceConfig("GROCERY").theme.primary;
+  const openProduct = useProductDetailStore((s) => s.open);
 
   if (!loading && products.length === 0) return null;
 
@@ -66,6 +68,7 @@ export function GroceryHorizontalCarousel({ title, products, loading, accent, on
                 cardWidth={cardWidth}
                 qty={qty}
                 accent={groceryAccent}
+                onOpen={() => openProduct(p)}
                 onInc={() => addItem(storeProductRef(p))}
                 onDec={() => {
                   if (line) updateQty(line.lineId, -1);

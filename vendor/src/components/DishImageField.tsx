@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "rea
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Icon } from "@/components/Icon";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, typography } from "@/theme";
 
 const MAX_DIMENSION = 900;
 const JPEG_QUALITY = 0.7;

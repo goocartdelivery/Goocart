@@ -1,4 +1,4 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -30,17 +30,19 @@ export default function AccountScreen() {
     { label: "Help & Support", onPress: () => notAvailableYet("Help & Support") },
   ];
 
+  const runLogout = () => {
+    clearCart();
+    void logout().then(() => router.replace("/login"));
+  };
+
   const confirmLogout = () => {
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm("Are you sure you want to log out of Goocart?")) runLogout();
+      return;
+    }
     Alert.alert("Log out", "Are you sure you want to log out of Goocart?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Log out",
-        style: "destructive",
-        onPress: () => {
-          clearCart();
-          void logout().then(() => router.replace("/login"));
-        },
-      },
+      { text: "Log out", style: "destructive", onPress: runLogout },
     ]);
   };
 

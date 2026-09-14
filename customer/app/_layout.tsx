@@ -14,6 +14,7 @@ import { usePricingStore } from "@/store/usePricingStore";
 import { useCartStore } from "@/store/useCartStore";
 import { useStoreCartStore } from "@/store/useStoreCartStore";
 import { initNotificationDeepLinking } from "@/services/PushService";
+import { ProductDetailSheet } from "@/components/home/ProductDetailSheet";
 
 export default function RootLayout() {
   // Hydrated once at the root so persisted state survives a cold start on any
@@ -45,6 +46,7 @@ export default function RootLayout() {
             screens by hand risks silent mismatches for nested routes (e.g.
             "food" vs the real route name "food/index"). */}
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
+        <ProductDetailSheet />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -226,7 +226,7 @@ export default function CartScreen() {
     const item = storeItems.find((i) => i.lineId === lineId);
     if (!item) return;
     animate();
-    storeAdd(storeProductRef({ id: item.productId, service: item.service, name: item.name, imageUrl: item.imageUrl, price: item.unitPrice }));
+    storeAdd(storeProductRef({ id: item.productId, service: item.service, name: item.name, imageUrl: item.imageUrl, price: item.unitPrice, prescriptionRequired: item.prescriptionRequired }));
   };
   const handleStoreDec = (lineId: string) => storeUpdateQty(lineId, -1);
   const handleStoreRemove = (lineId: string) => {
@@ -237,7 +237,7 @@ export default function CartScreen() {
     ]);
   };
   const handleStoreClear = () => {
-    Alert.alert("Clear Store Cart?", "This will remove all Grocery, Vegetables and Mart items from your Store Cart.", [
+    Alert.alert("Clear Store Cart?", "This will remove all Grocery, Vegetables, Mart and Medicine items from your Store Cart.", [
       { text: "Cancel", style: "cancel" },
       { text: "Clear", style: "destructive", onPress: storeClear },
     ]);

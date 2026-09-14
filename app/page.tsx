@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 
-type Service = "Food" | "Grocery" | "Vegetables" | "Mart" | "Bike Taxi" | "Parcel";
-type Product = { id:string; service:Service; vendor:string; name:string; description:string; image_url:string|null; price:number; stock:number; rating:number; eta:string };
+type Service = "Food" | "Grocery" | "Vegetables" | "Mart" | "Medicine" | "Bike Taxi" | "Parcel";
+type Product = { id:string; service:Service; vendor:string; name:string; description:string; image_url:string|null; price:number; mrp:number|null; unit:string|null; category:string; prescription_required?:boolean; stock:number; rating:number; eta:string };
 type Order = { id:string; reference:string; service:Service; vendor:string; vendor_id:string; customer:string; customer_id:string; partner:string|null; partner_id:string|null; status:string; total:number; details:Record<string,unknown>; created_at:string; updated_at:string };
 type Offer = { id:string;vendor_id:string;vendor:string;title:string;code:string;discount_percent:number;min_order:number;active:number;created_at:string;updated_at:string };
 type PlatformUser = { id:string;email:string;name:string;role:string;status:string;created_at?:string };
@@ -13,8 +13,9 @@ type ApiResult = { success:boolean; data?:Snapshot; error?:{code?:string;message
 type ErrorState = { code:string; message:string };
 
 const adminNav:string[] = ["Dashboard","Live Orders","Live Operations","Orders","Rides","Parcels","Vendors","Delivery Partners","Customers","Catalog","Discounts & Pricing","Automation","Finance","Support","Reports","Settings"];
-const commerce:Service[] = ["Food","Grocery","Vegetables","Mart"];
-const allServices:Service[] = ["Food","Grocery","Vegetables","Mart","Bike Taxi","Parcel"];
+const commerce:Service[] = ["Food","Grocery","Vegetables","Mart","Medicine"];
+const allServices:Service[] = ["Food","Grocery","Vegetables","Mart","Medicine","Bike Taxi","Parcel"];
+const MEDICINE_SUBCATEGORIES:[string,string][] = [["prescription-medicines","Prescription"],["pain-relief","Pain Relief"],["cold-flu","Cold & Flu"],["vitamins-supplements","Vitamins"],["diabetes-care","Diabetes"],["personal-care","Personal Care"],["baby-care","Baby Care"],["first-aid","First Aid"],["healthcare-devices","Devices"]];
 const money = (value:number) => `₹${Math.round(value).toLocaleString("en-IN")}`;
 const label = (value:string) => value.replaceAll("_"," ").toLowerCase().replace(/\b\w/g,(x)=>x.toUpperCase());
 const terminalStatuses=["DELIVERED","COMPLETED","CANCELLED_BY_ADMIN","VENDOR_REJECTED"];
@@ -124,42 +125,53 @@ function Kpis({items}:{items:[string,string,string][]}){return <section classNam
 function OrdersTable({orders,act,busy}:{orders:Order[];act:(x:Record<string,unknown>)=>Promise<boolean>;busy:boolean}){return <div className="ops-table"><div className="ops-row ops-head"><span>REFERENCE</span><span>DETAILS</span><span>STATUS</span><span>VALUE</span><span>ACTION</span></div>{orders.map((o)=><div className="ops-row" key={o.id}><b>{o.reference}</b><span>{o.vendor}<small>{o.service} • {orderSummary(o)}</small></span><Status value={o.status}/><strong>{money(o.total)}</strong><OrderAction order={o} act={act} busy={busy}/></div>)}{!orders.length&&<Empty title="No matching work" copy="New activity will appear here automatically."/>}</div>}
 function OrderAction({order,act,busy}:{order:Order;act:(x:Record<string,unknown>)=>Promise<boolean>;busy:boolean}){if(terminalStatuses.includes(order.status))return null;return <div className="row-actions"><button className="danger" disabled={busy} onClick={()=>void act({action:"order.transition",id:order.id,to:"CANCELLED_BY_ADMIN"})}>Cancel</button></div>}
 
-function Admin({state,act,busy,retry}:{state:Snapshot;act:(x:Record<string,unknown>)=>Promise<boolean>;busy:boolean;retry:()=>Promise<void>}){const [page,setPage]=useState("Dashboard");const orders=state.orders;const gmv=orders.reduce((s,x)=>s+x.total,0);const active=orders.filter((x)=>!terminalStatuses.includes(x.status));const rides=orders.filter((x)=>x.service==="Bike Taxi");const parcels=orders.filter((x)=>x.service==="Parcel");return <Shell page={page} setPage={setPage} state={state}>{page==="Dashboard"&&<><div className="overview"><span><small>Command center</small><h2>Operations at a glance.</h2></span><b>LIVE DATA</b></div><Kpis items={[[money(gmv),"Total GMV","All services"],[String(orders.length),"Total orders & jobs","Live"],[String(active.length),"Active operations","Now"],[String(state.services.filter((x)=>x.enabled).length),"Enabled services","of 6"]]}/><section className="panel"><div><span><h2>Live operations</h2><small>Customer, vendor and partner activity</small></span></div><OrdersTable orders={active.slice(0,7)} act={act} busy={busy}/></section></>}{page==="Live Orders"&&<AdminLiveOrders/>}{["Live Operations","Orders"].includes(page)&&<WorkspacePage eyebrow="REALTIME OPERATIONS" title={page} copy="Monitor status and intervene when necessary."><OrdersTable orders={page==="Orders"?orders:active} act={act} busy={busy}/></WorkspacePage>}{page==="Rides"&&<WorkspacePage eyebrow="RIDE ENGINE" title="Bike taxi" copy="Ride requests, driver assignments and completions."><OrdersTable orders={rides} act={act} busy={busy}/></WorkspacePage>}{page==="Parcels"&&<WorkspacePage eyebrow="PARCEL ENGINE" title="Parcel operations" copy="Pickup, transit and delivery verification."><OrdersTable orders={parcels} act={act} busy={busy}/></WorkspacePage>}{page==="Catalog"&&<AdminCatalog state={state} act={act} busy={busy} retry={retry}/>} {page==="Discounts & Pricing"&&<AdminDiscounts/>} {page==="Automation"&&<AdminAutomation/>} {page==="Settings"&&<AdminSettings state={state} act={act}/>} {page==="Finance"&&<AdminFinance/>} {page==="Vendors"&&<AdminVendors/>} {page==="Delivery Partners"&&<AdminPartners/>} {page==="Customers"&&<AdminCustomers/>} {page==="Support"&&<AdminSupport/>} {page==="Reports"&&<StatsPage title="Performance reports" stats={allServices.map((x)=>{const rows=orders.filter((o)=>o.service===x);return [x,`${rows.length} orders • ${money(rows.reduce((s,o)=>s+o.total,0))}`];})}/>}</Shell>}
+function Admin({state,act,busy,retry}:{state:Snapshot;act:(x:Record<string,unknown>)=>Promise<boolean>;busy:boolean;retry:()=>Promise<void>}){const [page,setPage]=useState("Dashboard");const orders=state.orders;const gmv=orders.reduce((s,x)=>s+x.total,0);const active=orders.filter((x)=>!terminalStatuses.includes(x.status));const rides=orders.filter((x)=>x.service==="Bike Taxi");const parcels=orders.filter((x)=>x.service==="Parcel");return <Shell page={page} setPage={setPage} state={state}>{page==="Dashboard"&&<><div className="overview"><span><small>Command center</small><h2>Operations at a glance.</h2></span><b>LIVE DATA</b></div><Kpis items={[[money(gmv),"Total GMV","All services"],[String(orders.length),"Total orders & jobs","Live"],[String(active.length),"Active operations","Now"],[String(state.services.filter((x)=>x.enabled).length),"Enabled services","of 7"]]}/>
+<section className="panel"><div><span><h2>Live operations</h2><small>Customer, vendor and partner activity</small></span></div><OrdersTable orders={active.slice(0,7)} act={act} busy={busy}/></section></>}{page==="Live Orders"&&<AdminLiveOrders/>}{["Live Operations","Orders"].includes(page)&&<WorkspacePage eyebrow="REALTIME OPERATIONS" title={page} copy="Monitor status and intervene when necessary."><OrdersTable orders={page==="Orders"?orders:active} act={act} busy={busy}/></WorkspacePage>}{page==="Rides"&&<WorkspacePage eyebrow="RIDE ENGINE" title="Bike taxi" copy="Ride requests, driver assignments and completions."><OrdersTable orders={rides} act={act} busy={busy}/></WorkspacePage>}{page==="Parcels"&&<WorkspacePage eyebrow="PARCEL ENGINE" title="Parcel operations" copy="Pickup, transit and delivery verification."><OrdersTable orders={parcels} act={act} busy={busy}/></WorkspacePage>}{page==="Catalog"&&<AdminCatalog state={state} act={act} busy={busy} retry={retry}/>} {page==="Discounts & Pricing"&&<AdminDiscounts/>} {page==="Automation"&&<AdminAutomation/>} {page==="Settings"&&<AdminSettings state={state} act={act}/>} {page==="Finance"&&<AdminFinance/>} {page==="Vendors"&&<AdminVendors/>} {page==="Delivery Partners"&&<AdminPartners/>} {page==="Customers"&&<AdminCustomers/>} {page==="Support"&&<AdminSupport/>} {page==="Reports"&&<StatsPage title="Performance reports" stats={allServices.map((x)=>{const rows=orders.filter((o)=>o.service===x);return [x,`${rows.length} orders • ${money(rows.reduce((s,o)=>s+o.total,0))}`];})}/>}</Shell>}
 function AdminCatalog({state,act,busy,retry}:{state:Snapshot;act:(x:Record<string,unknown>)=>Promise<boolean>;busy:boolean;retry:()=>Promise<void>}){
   const [showCreate,setShowCreate]=useState(false);
   const [error,setError]=useState("");
   const remove=async(id:string)=>{if(!confirm("Delete this product?"))return;try{await adminApi(`/products/${id}`,{method:"DELETE"});await retry();}catch(e){setError(e instanceof Error?e.message:"Could not delete this product");}};
-  return <WorkspacePage eyebrow="CATALOG & INVENTORY" title="All products" copy="Grocery, Vegetables and Mart items — create new ones, adjust stock, or remove them.">
+  return <WorkspacePage eyebrow="CATALOG & INVENTORY" title="All products" copy="Grocery, Vegetables, Mart and Medicine items — create new ones, adjust stock, or remove them.">
     {error&&<p className="auth-error">{error}</p>}
     <PrimaryActionButton label={showCreate?"Cancel":"+ Create Product"} onClick={()=>setShowCreate(!showCreate)}/>
     {showCreate&&<CreateProductForm onCreated={()=>{setShowCreate(false);void retry();}}/>}
-    <div className="inventory-list">{state.products.map((p)=><article key={p.id}>{p.image_url?<img src={p.image_url} alt="" className="vendor-thumb"/>:<i>{p.name[0]}</i>}<span><small>{p.service} • {p.vendor}</small><h3>{p.name}</h3><p>{money(p.price)} • ★ {p.rating}</p></span><b className={p.stock<15?"low-stock":""}>{p.stock} stock</b><div className="qty"><button disabled={busy} onClick={()=>void act({action:"stock.adjust",id:p.id,amount:-1})}>−</button><button disabled={busy} onClick={()=>void act({action:"stock.adjust",id:p.id,amount:5})}>+5</button></div><button className="secondary danger-text" onClick={()=>void remove(p.id)}>Delete</button></article>)}</div>
+    <div className="inventory-list">{state.products.map((p)=><article key={p.id}>{p.image_url?<img src={p.image_url} alt="" className="vendor-thumb"/>:<i>{p.name[0]}</i>}<span><small>{p.service} • {p.vendor}{p.prescription_required?" • Rx Only":""}</small><h3>{p.name}</h3><p>{money(p.price)}{p.mrp?<s> {money(p.mrp)}</s>:null}{p.unit?` • ${p.unit}`:""} • ★ {p.rating}</p></span><b className={p.stock<15?"low-stock":""}>{p.stock} stock</b><div className="qty"><button disabled={busy} onClick={()=>void act({action:"stock.adjust",id:p.id,amount:-1})}>−</button><button disabled={busy} onClick={()=>void act({action:"stock.adjust",id:p.id,amount:5})}>+5</button></div><button className="secondary danger-text" onClick={()=>void remove(p.id)}>Delete</button></article>)}</div>
   </WorkspacePage>;
 }
 
 function CreateProductForm({onCreated}:{onCreated:()=>void}){
-  const [form,setForm]=useState({service:"Grocery",name:"",description:"",imageUrl:"",price:"",stock:"0"});
+  const [form,setForm]=useState({service:"Grocery",name:"",description:"",imageUrl:"",price:"",stock:"0",mrp:"",unit:"",category:"",prescriptionRequired:false});
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError("");
     try{
-      await adminApi("/products",{method:"POST",body:JSON.stringify({service:form.service,name:form.name,description:form.description,imageUrl:form.imageUrl,price:Number(form.price),stock:Number(form.stock)})});
+      await adminApi("/products",{method:"POST",body:JSON.stringify({service:form.service,name:form.name,description:form.description,imageUrl:form.imageUrl,price:Number(form.price),stock:Number(form.stock),mrp:form.mrp?Number(form.mrp):null,unit:form.unit||undefined,category:form.category||undefined,prescriptionRequired:form.prescriptionRequired})});
       onCreated();
     }catch(e){setError(e instanceof Error?e.message:"Could not create this product");}finally{setBusy(false);}
   };
   return <form className="auth-form inline-form" onSubmit={(e)=>void submit(e)}>
     <label>Service
-      <select value={form.service} onChange={(e)=>setForm({...form,service:e.target.value})}>
+      <select value={form.service} onChange={(e)=>setForm({...form,service:e.target.value as Service})}>
         <option value="Grocery">Grocery</option>
         <option value="Vegetables">Vegetables</option>
         <option value="Mart">Mart</option>
+        <option value="Medicine">Medicine</option>
       </select>
     </label>
+    {form.service==="Medicine"&&<label>Subcategory
+      <select value={form.category} onChange={(e)=>setForm({...form,category:e.target.value})}>
+        <option value="">Miscellaneous</option>
+        {MEDICINE_SUBCATEGORIES.map(([key,labelText])=><option key={key} value={key}>{labelText}</option>)}
+      </select>
+    </label>}
     <ImageUploadField label="Product photo" value={form.imageUrl} onChange={(imageUrl)=>setForm({...form,imageUrl})}/>
     <label>Product name<input required value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})}/></label>
     <label>Description (optional)<input value={form.description} onChange={(e)=>setForm({...form,description:e.target.value})}/></label>
     <label>Price (₹)<input required type="number" min="1" value={form.price} onChange={(e)=>setForm({...form,price:e.target.value})}/></label>
+    <label>MRP (₹, optional)<input type="number" min="0" value={form.mrp} onChange={(e)=>setForm({...form,mrp:e.target.value})}/></label>
+    <label>Unit / pack size (optional)<input value={form.unit} onChange={(e)=>setForm({...form,unit:e.target.value})}/></label>
     <label>Stock<input type="number" min="0" value={form.stock} onChange={(e)=>setForm({...form,stock:e.target.value})}/></label>
+    {form.service==="Medicine"&&<label className="checkbox-label"><input type="checkbox" checked={form.prescriptionRequired} onChange={(e)=>setForm({...form,prescriptionRequired:e.target.checked})}/>Prescription required (Rx)</label>}
     {error&&<p className="auth-error">{error}</p>}
     <button className="primary" disabled={busy}>{busy?"Creating…":"Create product"}</button>
   </form>;

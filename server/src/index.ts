@@ -135,8 +135,13 @@ if (!isServerless) {
       console.error("Check MONGODB_URI in server/.env and that your IP is allowed in Atlas -> Network Access.");
     });
 
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Goocart API listening on http://0.0.0.0:${PORT}`);
+  // No host argument => Node binds the default dual-stack address (:: on
+  // IPv6-capable platforms, which accepts IPv4 too). Binding "0.0.0.0"
+  // explicitly would leave IPv6 localhost (::1) unreachable — and browsers
+  // on Windows often resolve `localhost` to ::1 first, producing spurious
+  // network failures behind the same-origin fetch.
+  httpServer.listen(PORT, () => {
+    console.log(`Goocart API listening on port ${PORT} (IPv4 + IPv6)`);
     console.log(`Health check: http://localhost:${PORT}/health`);
     console.log(`Realtime (Socket.IO) is live on the same port.`);
   });

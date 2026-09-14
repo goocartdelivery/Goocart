@@ -10,27 +10,36 @@ type Props = {
   qty: number;
   onInc: () => void;
   onDec: () => void;
+  onOpen?: () => void;
   accent?: string;
 };
 
 const DEFAULT_ACCENT = "#16A34A";
 
-export function GroceryProductCard({ product, cardWidth, qty, onInc, onDec, accent = DEFAULT_ACCENT }: Props) {
+export function GroceryProductCard({ product, cardWidth, qty, onInc, onDec, onOpen, accent = DEFAULT_ACCENT }: Props) {
   const desc = product.description || product.eta || "";
+  const open = onOpen ?? (() => undefined);
   return (
     <View style={[styles.card, { width: cardWidth }]}>
-      <View style={styles.imageWrap}>
+      <Pressable onPress={open} accessibilityRole="button" accessibilityLabel={`View ${product.name}`} style={styles.imageWrap}>
         <RemoteImage uri={product.imageUrl} fallbackLabel={product.name} style={styles.image} contentFit="cover" />
-      </View>
-      <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={2}>
-          {product.name}
-        </Text>
-        {desc ? (
-          <Text style={styles.desc} numberOfLines={1}>
-            {desc}
-          </Text>
+        {product.prescriptionRequired ? (
+          <View style={styles.rxBadge}>
+            <Text style={styles.rxText}>Rx</Text>
+          </View>
         ) : null}
+      </Pressable>
+      <View style={styles.body}>
+        <Pressable onPress={open} accessibilityRole="button" accessibilityLabel={`View details for ${product.name}`}>
+          <Text style={styles.name} numberOfLines={2}>
+            {product.name}
+          </Text>
+          {desc ? (
+            <Text style={styles.desc} numberOfLines={1}>
+              {desc}
+            </Text>
+          ) : null}
+        </Pressable>
         <View style={styles.bottomRow}>
           <Text style={[styles.price, { color: accent }]}>₹{product.price}</Text>
           <View style={styles.actionSlot}>
@@ -73,6 +82,16 @@ const styles = StyleSheet.create({
   },
   imageWrap: { width: "100%", aspectRatio: 1.15, backgroundColor: colors.background },
   image: { width: "100%", height: "100%" },
+  rxBadge: {
+    position: "absolute",
+    left: 6,
+    top: 6,
+    backgroundColor: "#0E9F6E",
+    borderRadius: radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  rxText: { color: colors.white, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
   body: { padding: spacing.sm, gap: 2 },
   name: { ...typography.bodyStrong, fontSize: 12.5, lineHeight: 16 },
   desc: { ...typography.caption, fontSize: 10.5, color: colors.muted },

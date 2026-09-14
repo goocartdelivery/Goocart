@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { RequireVendor } from "@/components/AuthGates";
 import { EmptyState } from "@/components/EmptyState";
 import { DishImageField } from "@/components/DishImageField";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -25,10 +26,12 @@ export default function EditMenuItemScreen() {
 
   if (!item || !id) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <ScreenHeader title="Edit dish" />
-        <EmptyState icon="alert" title="Item not found" copy="This dish may have been removed." />
-      </SafeAreaView>
+      <RequireVendor>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <ScreenHeader title="Edit dish" />
+          <EmptyState icon="alert" title="Item not found" copy="This dish may have been removed." />
+        </SafeAreaView>
+      </RequireVendor>
     );
   }
 
@@ -50,40 +53,42 @@ export default function EditMenuItemScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScreenHeader title="Edit dish" subtitle={item.name} />
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <DishImageField value={imageUrl} onChange={setImageUrl} />
-          <Field label="Dish name" value={name} onChangeText={setName} />
-          <Field label="Description" value={description} onChangeText={setDescription} multiline />
-          <Field label="Price (₹)" value={price} onChangeText={setPrice} keyboardType="numeric" />
+    <RequireVendor>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ScreenHeader title="Edit dish" subtitle={item.name} />
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <DishImageField value={imageUrl} onChange={setImageUrl} />
+            <Field label="Dish name" value={name} onChangeText={setName} />
+            <Field label="Description" value={description} onChangeText={setDescription} multiline />
+            <Field label="Price (₹)" value={price} onChangeText={setPrice} keyboardType="numeric" />
 
-          <View style={styles.switchRow}>
-            <Text style={typography.captionStrong}>Vegetarian</Text>
-            <Switch
-              value={veg}
-              onValueChange={setVeg}
-              trackColor={{ false: colors.border, true: colors.successMuted }}
-              thumbColor={veg ? colors.success : colors.surface}
-            />
-          </View>
+            <View style={styles.switchRow}>
+              <Text style={typography.captionStrong}>Vegetarian</Text>
+              <Switch
+                value={veg}
+                onValueChange={setVeg}
+                trackColor={{ false: colors.border, true: colors.successMuted }}
+                thumbColor={veg ? colors.success : colors.surface}
+              />
+            </View>
 
-          <View style={styles.switchRow}>
-            <Text style={typography.captionStrong}>Available</Text>
-            <Switch
-              value={available}
-              onValueChange={setAvailable}
-              trackColor={{ false: colors.border, true: colors.successMuted }}
-              thumbColor={available ? colors.success : colors.surface}
-            />
-          </View>
+            <View style={styles.switchRow}>
+              <Text style={typography.captionStrong}>Available</Text>
+              <Switch
+                value={available}
+                onValueChange={setAvailable}
+                trackColor={{ false: colors.border, true: colors.successMuted }}
+                thumbColor={available ? colors.success : colors.surface}
+              />
+            </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <PrimaryButton label={busy ? "Saving…" : "Save changes"} onPress={() => void submit()} disabled={busy} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <PrimaryButton label={busy ? "Saving…" : "Save changes"} onPress={() => void submit()} disabled={busy} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </RequireVendor>
   );
 }
 

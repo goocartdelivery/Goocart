@@ -240,6 +240,7 @@ const SERVICE_NAMES: Record<string, string> = {
   GROCERY: "Grocery",
   VEGETABLES: "Vegetables",
   MART: "Mart",
+  MEDICINE: "Medicine",
   BIKE_TAXI: "Bike Taxi",
   PARCEL: "Parcel",
 };
@@ -389,11 +390,14 @@ customerRouter.get("/directions", async (req, res) => {
 customerRouter.get("/services/:key/products", async (req, res) => {
   try {
     const service = SERVICE_NAMES[String(req.params.key).toUpperCase()];
-    if (!["Grocery", "Vegetables", "Mart"].includes(service)) return res.status(400).json(fail("INVALID_SERVICE", "This service does not have a product catalog."));
+    if (!["Grocery", "Vegetables", "Mart", "Medicine"].includes(service)) return res.status(400).json(fail("INVALID_SERVICE", "This service does not have a product catalog."));
     const config: any = await ServiceConfig.findById(service).lean();
     if (config?.enabled === false) return res.status(409).json(fail("SERVICE_UNAVAILABLE", `${service} is temporarily unavailable.`));
-    const products = await Product.find({ service, stock: { $gt: 0 } }).sort({ vendorName: 1, name: 1 }).lean();
-    res.json(ok({ products: (products as any[]).map((p) => ({ id: String(p._id), service: p.service, vendorId: String(p.vendorId), vendorName: p.vendorName, name: p.name, description: p.description, imageUrl: p.imageUrl ?? null, price: p.price, stock: p.stock, rating: p.rating, eta: p.eta })) }));
+    const category = String(req.query.category ?? "").trim();
+    const filter: Record<string, unknown> = { service, stock: { $gt: 0 } };
+    if (category) filter.category = category;
+    const products = await Product.find(filter).sort({ vendorName: 1, name: 1 }).lean();
+    res.json(ok({ products: (products as any[]).map((p) => ({ id: String(p._id), service: p.service, vendorId: String(p.vendorId), vendorName: p.vendorName, name: p.name, description: p.description, imageUrl: p.imageUrl ?? null, price: p.price, mrp: p.mrp ?? null, unit: p.unit ?? null, category: p.category ?? "", prescriptionRequired: Boolean(p.prescriptionRequired ?? false), stock: p.stock, rating: p.rating, eta: p.eta })) }));
   } catch (e) {
     res.status(500).json(fail("PRODUCTS_UNAVAILABLE", e instanceof Error ? e.message : "Unable to load products"));
   }
@@ -455,12 +459,12 @@ customerRouter.post("/service-orders", requireAuth, async (req: AuthedRequest, r
     const requested = Array.isArray(body.items) ? body.items : [];
     if (!requested.length) return res.status(400).json(fail("EMPTY_CART", "Choose at least one product."));
 
-    // A single GoCart Store order may combine Grocery, Vegetables and Mart
-    // products in one cart/checkout. All store products share the same
-    // store vendor, so every line is validated against its own `service`
+    // A single GoCart Store order may combine Grocery, Vegetables, Mart and
+    // Medicine products in one cart/checkout. All store products share the
+    // same store vendor, so every line is validated against its own `service`
     // (any of the store services) and every line must come from the same
     // vendor — preserving the existing per-service and single-vendor rules.
-    const STORE_SERVICES = new Set(["Grocery", "Vegetables", "Mart"]);
+    const STORE_SERVICES = new Set(["Grocery", "Vegetables", "Mart", "Medicine"]);
     const isStoreOrder = STORE_SERVICES.has(service);
 
     const lines: any[] = [];
@@ -473,6 +477,16 @@ customerRouter.post("/service-orders", requireAuth, async (req: AuthedRequest, r
       lines.push({ product, quantity });
     }
     if (lines.some((line) => String(line.product.vendorId) !== String(lines[0].product.vendorId))) return res.status(409).json(fail("MULTI_VENDOR_CART", "Place separate orders for different stores."));
+
+    // Prescription medicines are served only against a valid prescription.
+    // The client must explicitly attest it holds one (prescriptionProvided);
+    // without it the whole cart is rejected. The flag always travels in the
+    // order details so staff/pharmacy can double check on delivery.
+    const rxLines = lines.filter((line) => line.product.service === "Medicine" && line.product.prescriptionRequired);
+    if (rxLines.length && body.prescriptionProvided !== true) {
+      return res.status(409).json(fail("PRESCRIPTION_REQUIRED", "Prescription medicines in your cart require a valid prescription. Confirm you have one at checkout."));
+    }
+
     const pricing = await getPricingSettings();
     const rawTip = Math.max(0, Math.round(Number(body.tip ?? 0)) || 0);
     const subtotal = Math.round(lines.reduce((sum, line) => sum + line.product.price * line.quantity, 0));
@@ -492,7 +506,7 @@ customerRouter.post("/service-orders", requireAuth, async (req: AuthedRequest, r
 
     const distinctServices = Array.from(new Set(lines.map((line) => line.product.service)));
     const combined = distinctServices.length > 1;
-    const prefix: Record<string, string> = { Grocery: "GR", Vegetables: "VG", Mart: "MT" };
+    const prefix: Record<string, string> = { Grocery: "GR", Vegetables: "VG", Mart: "MT", Medicine: "MD" };
     const reference = `GOO-${combined ? "ST" : prefix[service]}-${new Date().getFullYear()}-${String(await nextSequence("serviceOrderNumber")).padStart(6, "0")}`;
     let order;
     try {
@@ -500,8 +514,9 @@ customerRouter.post("/service-orders", requireAuth, async (req: AuthedRequest, r
         reference, service, vendorId: lines[0].product.vendorId, vendorName: lines[0].product.vendorName, customerId: req.user!._id, customerName: req.user!.name,
         status: "READY_FOR_PICKUP", total,
         details: {
-          items: lines.map((line) => ({ productId: String(line.product._id), name: line.product.name, service: line.product.service, quantity: line.quantity, unitPrice: line.product.price, lineTotal: line.product.price * line.quantity })),
+          items: lines.map((line) => ({ productId: String(line.product._id), name: line.product.name, service: line.product.service, quantity: line.quantity, unitPrice: line.product.price, lineTotal: line.product.price * line.quantity, prescriptionRequired: Boolean(line.product.prescriptionRequired ?? false) })),
           services: distinctServices, serviceGroup: "GoCart Store",
+          prescriptionRequired: rxLines.length > 0, prescriptionProvided: rxLines.length ? body.prescriptionProvided === true : undefined,
           address: body.address ?? null,
           bill: { itemTotal: subtotal, restaurantDiscount: 0, couponDiscount: 0, deliveryFee: pricing.deliveryFee, platformFee: pricing.platformFee, taxes, tip: rawTip, total },
           subtotal, deliveryFee: pricing.deliveryFee, platformFee: pricing.platformFee, taxes, tip: rawTip, vendorCommission, vendorPayable, partnerPayout: pricing.deliveryPartnerPayout, platformNetRevenue: pricing.deliveryFee + pricing.platformFee + vendorCommission - pricing.deliveryPartnerPayout, verificationCode: String(Math.floor(1000 + Math.random() * 9000)),

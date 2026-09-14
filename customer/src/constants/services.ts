@@ -16,6 +16,7 @@ export const SERVICES: ServiceMeta[] = [
   { type: "GROCERY", label: "Grocery", icon: "grocery", note: "30–45 min", color: "#28733F", tint: "#E8F7ED", usesCart: true },
   { type: "VEGETABLES", label: "Vegetables", icon: "vegetables", note: "Farm fresh", color: "#507329", tint: "#EEF8DF", usesCart: true },
   { type: "MART", label: "Mart", icon: "mart", note: "10–20 min", color: "#986B21", tint: "#FFF4D8", usesCart: true },
+  { type: "MEDICINE", label: "Medicine", icon: "medical", note: "Genuine medicines", color: "#0E9F6E", tint: "#E6F7F1", usesCart: true },
   { type: "BIKE_TAXI", label: "Bike Taxi", icon: "bike", note: "From ₹29", color: "#415B9C", tint: "#E9EFFF", usesCart: false },
   { type: "PARCEL", label: "Parcel", icon: "parcel", note: "Send local", color: "#74518F", tint: "#F4EAFF", usesCart: false },
 ];

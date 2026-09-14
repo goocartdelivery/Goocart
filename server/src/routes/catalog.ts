@@ -138,6 +138,55 @@ catalogRouter.get("/search", async (req, res) => {
   }
 });
 
+// Dishes scoped to a food subcategory. Feed it the subcategory's keyword list
+// (e.g. "biryani rice mandi dum") and it returns the real, available dishes
+// that match those keywords by name/description OR belong to a restaurant
+// whose name/cuisines match — i.e. the "Food + Biryani" query the app's
+// subcategory grid needs, driven entirely from database data.
+catalogRouter.get("/dishes", async (req, res) => {
+  try {
+    const raw = String(req.query.q ?? "").trim();
+    if (!raw) return res.json(ok({ items: [] }));
+    const terms = raw.split(/\s+/).filter(Boolean);
+    const regex = new RegExp(terms.map(escapeRegex).join("|"), "i");
+
+    const [restaurants, items] = await Promise.all([
+      Restaurant.find({ $or: [{ name: regex }, { cuisines: regex }] }).sort({ rating: -1 }).lean(),
+      FoodItem.find({ $or: [{ name: regex }, { description: regex }], available: true }).sort({ bestseller: -1, rating: -1 }).limit(80).lean(),
+    ]);
+
+    const names = new Map<string, string>();
+    const restaurantIds = [...new Set([...restaurants.map((r: any) => String(r._id)), ...items.map((i: any) => String(i.restaurantId))])];
+    if (restaurantIds.length) {
+      const owners = await Restaurant.find({ _id: { $in: restaurantIds } }, { name: 1 }).lean();
+      owners.forEach((o: any) => names.set(String(o._id), o.name));
+    }
+
+    const matchingRestaurantIds = new Set(restaurants.map((r: any) => String(r._id)));
+    const dishes = items
+      .filter((i: any) => matchingRestaurantIds.has(String(i.restaurantId)) || regex.test(i.name))
+      .slice(0, 48)
+      .map((i: any) => ({
+        id: String(i._id),
+        restaurantId: String(i.restaurantId),
+        restaurantName: names.get(String(i.restaurantId)) ?? "",
+        categoryId: i.categoryKey,
+        name: i.name,
+        description: i.description,
+        imageUrl: i.imageUrl,
+        price: i.price,
+        discountPercent: i.discountPercent || 0,
+        veg: i.veg,
+        bestseller: i.bestseller,
+        rating: i.rating || null,
+      }));
+
+    res.json(ok({ items: dishes }));
+  } catch (e) {
+    res.status(500).json(fail("DISHES_UNAVAILABLE", e instanceof Error ? e.message : "Unable to load dishes"));
+  }
+});
+
 catalogRouter.get("/coupons", async (_req, res) => {
   try {
     const rows = await Coupon.find({ active: true }).lean();

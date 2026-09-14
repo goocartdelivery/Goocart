@@ -1,13 +1,15 @@
 import { apiGet, apiPost } from "@/services/apiClient";
 
-export type ServiceProduct = { id:string; service:string; vendorId:string; vendorName:string; name:string; description:string; imageUrl:string|null; price:number; stock:number; rating:number; eta:string };
+export type ServiceProduct = { id:string; service:string; vendorId:string; vendorName:string; name:string; description:string; imageUrl:string|null; price:number; mrp:number|null; unit:string|null; category:string; prescriptionRequired:boolean; stock:number; rating:number; eta:string };
 export type ServicePricing = { service:string; baseFare:number; perKm:number; platformFee:number; partnerPayoutPercent:number };
 export type ServiceOrderPartner = { id:string; name:string|null; photoUrl?:string|null; vehicleType?:string|null; vehicleNumber?:string|null; partnerRating?:number|null };
 export type ServiceOrder = { id:string; reference:string; service:string; vendorName:string; status:string; total:number; details:Record<string,unknown>; partner:ServiceOrderPartner|null; createdAt:string; updatedAt:string };
 export type FarePreview = { distanceKm:number; baseFare:number; perKm:number; platformFee:number; fare:number; total:number };
 
 export const serviceOrderService = {
-  async products(key:string){ return (await apiGet<{products:ServiceProduct[]}>(`/api/v1/customer/services/${key}/products`)).products; },
+  async products(key:string, opts?: { category?: string }) {
+    return (await apiGet<{products:ServiceProduct[]}>(`/api/v1/customer/services/${key}/products`, { category: opts?.category })).products;
+  },
   async configuration(){ return apiGet<{services:{key:string;name:string;enabled:boolean}[];pricing:ServicePricing[]}>("/api/v1/customer/services"); },
   // Distance and fare are calculated server-side (this previews exactly what
   // booking will charge). Pickup/drop coordinates come from the map picker,

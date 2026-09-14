@@ -10,6 +10,7 @@ const PLACEHOLDER: Record<ServiceType, string> = {
   GROCERY: "Search for Milk, Rice, Atta, Oil...",
   VEGETABLES: "Search for Tomato, Potato, Onion...",
   MART: "Search for Bread, Soap, Detergent...",
+  MEDICINE: "Search for Calpol, Dolo, ORS...",
   BIKE_TAXI: "Where are you headed?",
   PARCEL: "Where should we pick up from?",
 };

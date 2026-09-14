@@ -1,5 +1,5 @@
 import { Platform, View } from "react-native";
-import { Tabs } from "expo-router";
+import { Tabs, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "@/theme";
 import { Icon, IconName } from "@/components/Icon";
@@ -18,6 +18,8 @@ export default function TabsLayout() {
   // bottom edge; without this the tab bar sits under the system bar.
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === "android" ? 8 : 0);
+  const pathname = usePathname();
+  const onAccount = pathname?.endsWith("/account") ?? false;
 
   const tab = (name: string, title: string, icon: IconName, activeIcon: IconName) => (
     <Tabs.Screen
@@ -60,12 +62,13 @@ export default function TabsLayout() {
       </Tabs>
       {/* Floating active-order bar — sits above the bottom nav, across all tabs
           (hierarchy: content → bar → tab bar → safe area). Only appears while
-          an order is live; delivered/cancelled orders hide it. */}
-      <ActiveOrderBar bottomOffset={TAB_BAR_CONTENT_HEIGHT + bottomInset + 12} />
-      {/* Sticky grocery/store cart bar. Sits above ActiveOrderBar so checkout
-          is always the most directly reachable action. Offsets are stacked:
-          tab bar (58+inset) → 12 gap → ActiveOrder (≈56px est.) → 8 gap → cart bar. */}
-      <GroceryStickyCartBar bottomOffset={TAB_BAR_CONTENT_HEIGHT + bottomInset + 12 + 60 + spacing.sm} />
+          an order is live; delivered/cancelled orders hide it. Never shown on
+          the Account tab, which intentionally stays free of ongoing orders. */}
+      {!onAccount ? <ActiveOrderBar bottomOffset={TAB_BAR_CONTENT_HEIGHT + bottomInset + 12} /> : null}
+      {/* Sticky grocery/store cart bar. Sits directly above the bottom nav with
+          only a small gap — never floating mid-screen. Hidden on the Cart tab
+          and whenever the store cart is empty (see GroceryStickyCartBar). */}
+      <GroceryStickyCartBar bottomOffset={TAB_BAR_CONTENT_HEIGHT + bottomInset + spacing.sm} />
     </View>
   );
 }

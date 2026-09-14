@@ -14,6 +14,7 @@ const SERVICE_EMOJIS: Record<string, string> = {
   GROCERY: "🛒",
   VEGETABLES: "🥬",
   MART: "🛍️",
+  MEDICINE: "💊",
   BIKE_TAXI: "🛵",
   PARCEL: "📦",
 };
@@ -145,7 +146,7 @@ export function ServiceTabs({ onLayoutInfo, pillTranslateX: externalX, onScrollX
         pointerEvents="none"
         style={[
           styles.pill,
-          { width: tabW, height: 80, backgroundColor: theme.primary, transform: [{ translateX }] },
+          { width: tabW, height: 76, backgroundColor: theme.primary, transform: [{ translateX }] },
         ]}
       />
 
@@ -185,21 +186,21 @@ export function ServiceTabs({ onLayoutInfo, pillTranslateX: externalX, onScrollX
 
 const styles = StyleSheet.create({
   tabsScroll: {
-    height: 104,
+    height: 96,
   },
   wrap: {
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     alignItems: "center",
     position: "relative",
   },
   pill: {
     position: "absolute",
     left: 0,
-    top: spacing.md,
+    top: spacing.sm,
     width: 76,
-    height: 80,
+    height: 76,
     borderRadius: radius.lg,
     overflow: "hidden",
     zIndex: 0,
@@ -207,9 +208,9 @@ const styles = StyleSheet.create({
   tab: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
     width: 76,
-    height: 80,
+    height: 76,
     borderRadius: radius.lg,
     zIndex: 1,
   },
@@ -222,13 +223,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  emoji: { fontSize: 24 },
-  iconImage: { width: 44, height: 44, borderRadius: 22 },
+  emoji: { fontSize: 22 },
+  iconImage: { width: 40, height: 40, borderRadius: 20 },
   label: { ...typography.captionStrong, fontSize: 11, textAlign: "center" },
 });

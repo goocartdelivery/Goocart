@@ -7,7 +7,17 @@ type LoadState = "idle" | "loading" | "loaded" | "error";
 type ServiceHomeState = {
   products: Partial<Record<ServiceType, ServiceProduct[]>>;
   productsState: Partial<Record<ServiceType, LoadState>>;
+  productsError: Partial<Record<ServiceType, string>>;
   loadProducts: (service: ServiceType, force?: boolean) => Promise<void>;
+
+  // Subcategory-scoped products: fetched server-side per (service, category),
+  // cached under that exact key so switching subcategories never shows the
+  // previous subcategory's results during the transition — a fresh key starts
+  // at "idle"/"loading" until its own fetch resolves.
+  categoryProducts: Partial<Record<ServiceType, Record<string, ServiceProduct[]>>>;
+  categoryProductsState: Partial<Record<ServiceType, Record<string, LoadState>>>;
+  categoryProductsError: Partial<Record<ServiceType, Record<string, string>>>;
+  loadCategoryProducts: (service: ServiceType, categoryKey: string, force?: boolean) => Promise<void>;
 
   quantity: Partial<Record<ServiceType, Record<string, number>>>;
   setQuantity: (service: ServiceType, productId: string, delta: number) => void;
@@ -26,6 +36,7 @@ type ServiceHomeState = {
 export const useServiceHomeStore = create<ServiceHomeState>((set, get) => ({
   products: {},
   productsState: {},
+  productsError: {},
   loadProducts: async (service, force = false) => {
     if (get().productsState[service] === "loaded" && !force) return;
     set({ productsState: { ...get().productsState, [service]: "loading" } });
@@ -34,9 +45,55 @@ export const useServiceHomeStore = create<ServiceHomeState>((set, get) => ({
       set({
         products: { ...get().products, [service]: rows },
         productsState: { ...get().productsState, [service]: "loaded" },
+        productsError: { ...get().productsError, [service]: undefined },
       });
-    } catch {
-      set({ productsState: { ...get().productsState, [service]: "error" } });
+    } catch (e) {
+      set({
+        productsState: { ...get().productsState, [service]: "error" },
+        productsError: { ...get().productsError, [service]: e instanceof Error ? e.message : "Unknown error" },
+      });
+    }
+  },
+
+  categoryProducts: {},
+  categoryProductsState: {},
+  categoryProductsError: {},
+  loadCategoryProducts: async (service, categoryKey, force = false) => {
+    const ready = get().categoryProductsState[service]?.[categoryKey] === "loaded";
+    if (ready && !force) return;
+    set({
+      categoryProductsState: {
+        ...get().categoryProductsState,
+        [service]: { ...(get().categoryProductsState[service] ?? {}), [categoryKey]: "loading" },
+      },
+    });
+    try {
+      const rows = await serviceOrderService.products(service, { category: categoryKey });
+      set({
+        categoryProducts: {
+          ...get().categoryProducts,
+          [service]: { ...(get().categoryProducts[service] ?? {}), [categoryKey]: rows },
+        },
+        categoryProductsState: {
+          ...get().categoryProductsState,
+          [service]: { ...(get().categoryProductsState[service] ?? {}), [categoryKey]: "loaded" },
+        },
+        categoryProductsError: {
+          ...get().categoryProductsError,
+          [service]: { ...(get().categoryProductsError[service] ?? {}), [categoryKey]: undefined },
+        },
+      });
+    } catch (e) {
+      set({
+        categoryProductsState: {
+          ...get().categoryProductsState,
+          [service]: { ...(get().categoryProductsState[service] ?? {}), [categoryKey]: "error" },
+        },
+        categoryProductsError: {
+          ...get().categoryProductsError,
+          [service]: { ...(get().categoryProductsError[service] ?? {}), [categoryKey]: e instanceof Error ? e.message : "Unknown error" },
+        },
+      });
     }
   },
 
@@ -86,12 +143,17 @@ export function matchesCategory(product: ServiceProduct, keywords: string[]): bo
 // consumers can use these in useEffect/useMemo without causing re-render
 // loops or dependency churn.
 const EMPTY_PRODUCTS: ServiceProduct[] = [];
+const EMPTY_CATEGORY_PRODUCTS: Record<string, ServiceProduct[]> = {};
 const EMPTY_QUANTITY: Record<string, number> = {};
 const EMPTY_FAVORITES: Record<string, boolean> = {};
 const EMPTY_TRIPS: ServiceOrder[] = [];
 
 export function useServiceProducts(service: ServiceType): ServiceProduct[] {
   return useServiceHomeStore((s) => s.products[service] ?? EMPTY_PRODUCTS);
+}
+
+export function useCategoryProducts(service: ServiceType, categoryKey: string): ServiceProduct[] {
+  return useServiceHomeStore((s) => s.categoryProducts[service]?.[categoryKey] ?? EMPTY_PRODUCTS);
 }
 
 export function useServiceQuantity(service: ServiceType): Record<string, number> {

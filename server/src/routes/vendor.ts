@@ -4,6 +4,7 @@ import { requireRole, canVendor, hasVendorPermission, type AuthedRequest } from 
 import { ok, fail } from "../lib/http.js";
 import { toFoodItemDTO, toRestaurantDTO } from "./catalog.js";
 import { createFoodItem, updateFoodItem, MenuItemError } from "../lib/menuItems.js";
+import { computeVendorStats } from "../lib/vendorStats.js";
 
 export const vendorRouter = Router();
 vendorRouter.use(requireRole(canVendor, "Vendor access required"));
@@ -134,5 +135,51 @@ vendorRouter.delete("/menu/:id", requireVendorPermission("CAN_MANAGE_PRODUCTS", 
     res.json(ok({ deleted: true }, "Menu item removed"));
   } catch (e) {
     res.status(500).json(fail("MENU_ITEM_DELETE_FAILED", e instanceof Error ? e.message : "Could not remove this menu item"));
+  }
+});
+
+vendorRouter.get("/dashboard", async (req: AuthedRequest, res) => {
+  try {
+    const restaurant = await ownedRestaurant(req.user!);
+    if (!restaurant) return res.status(404).json(fail("NOT_ASSIGNED", "No restaurant is linked to your account yet. Ask an admin to assign one."));
+
+    const [stats, menuCount] = await Promise.all([
+      computeVendorStats(restaurant._id),
+      FoodItem.countDocuments({ restaurantId: restaurant._id }),
+    ]);
+
+    const cuisines = (restaurant.cuisines ?? []) as string[];
+
+    res.json(ok({
+      vendor: {
+        id: String(restaurant._id),
+        name: req.user!.name ?? "Vendor",
+        role: req.user!.role ?? "VENDOR_OWNER",
+        businessName: restaurant.name,
+        category: cuisines[0] ?? restaurant.businessType ?? "",
+        location: restaurant.area ?? "",
+        imageUrl: restaurant.imageUrl ?? null,
+        isAcceptingOrders: restaurant.isOpen ?? true,
+      },
+      stats: {
+        // Backward-compatible flat keys (home screen + orders reuse these).
+        todayOrders: stats.today.orders,
+        todayRevenue: stats.today.revenue,
+        pendingOrders: stats.lifetime.pending,
+        completedOrders: stats.today.completed,
+        newOrders: stats.lifetime.pending,
+        // Structured windows + series for Dashboard and Analytics.
+        today: stats.today,
+        month: stats.month,
+        lifetime: stats.lifetime,
+        series: stats.series,
+        topItems: stats.topItems,
+      },
+      quickActions: {
+        menuCount,
+      },
+    }, "Dashboard loaded"));
+  } catch (e) {
+    res.status(500).json(fail("DASHBOARD_UNAVAILABLE", e instanceof Error ? e.message : "Unable to load dashboard"));
   }
 });

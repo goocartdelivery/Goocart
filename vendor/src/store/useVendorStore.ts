@@ -2,6 +2,46 @@ import { create } from "zustand";
 import { apiGet, apiPatch, apiPost } from "@/services/apiClient";
 import { FoodItem, Restaurant } from "@/types";
 
+export type VendorStatsWindow = {
+  orders: number;
+  pending: number;
+  active: number;
+  completed: number;
+  rejected: number;
+  cancelled: number;
+  revenue: number;
+};
+
+export type DashboardStats = {
+  todayOrders: number;
+  todayRevenue: number;
+  pendingOrders: number;
+  completedOrders: number;
+  newOrders: number;
+  today: VendorStatsWindow;
+  month: VendorStatsWindow;
+  lifetime: VendorStatsWindow;
+  series: { date: string; orders: number; revenue: number }[];
+  topItems: { name: string; variant: string | null; quantity: number; revenue: number }[];
+};
+
+export type DashboardData = {
+  vendor: {
+    id: string;
+    name: string;
+    role: string;
+    businessName: string;
+    category: string;
+    location: string;
+    imageUrl: string | null;
+    isAcceptingOrders: boolean;
+  };
+  stats: DashboardStats;
+  quickActions: {
+    menuCount: number;
+  };
+};
+
 export type CreateMenuItemInput = {
   name: string;
   description: string;
@@ -24,11 +64,14 @@ type VendorState = {
   restaurant: Restaurant | null;
   restaurantLoaded: boolean;
   menu: FoodItem[];
+  dashboard: DashboardData | null;
+  dashboardLoading: boolean;
   loading: boolean;
   error: string | null;
   loadRestaurant: () => Promise<void>;
   setOpen: (isOpen: boolean) => Promise<void>;
   loadMenu: () => Promise<void>;
+  loadDashboard: () => Promise<void>;
   createMenuItem: (input: CreateMenuItemInput) => Promise<FoodItem>;
   updateMenuItem: (id: string, patch: UpdateMenuItemInput) => Promise<FoodItem>;
   clear: () => void;
@@ -41,6 +84,8 @@ export const useVendorStore = create<VendorState>((set, get) => ({
   restaurant: null,
   restaurantLoaded: false,
   menu: [],
+  dashboard: null,
+  dashboardLoading: false,
   loading: false,
   error: null,
 
@@ -68,6 +113,16 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     }
   },
 
+  loadDashboard: async () => {
+    set({ dashboardLoading: true, error: null });
+    try {
+      const data = await apiGet<DashboardData>("/api/v1/vendor/dashboard");
+      set({ dashboard: data, dashboardLoading: false });
+    } catch (e) {
+      set({ dashboardLoading: false, error: e instanceof Error ? e.message : "Could not load dashboard" });
+    }
+  },
+
   createMenuItem: async (input) => {
     const data = await apiPost<{ item: FoodItem }>("/api/v1/vendor/menu", input);
     set({ menu: [data.item, ...get().menu] });
@@ -80,5 +135,5 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     return data.item;
   },
 
-  clear: () => set({ restaurant: null, restaurantLoaded: false, menu: [], loading: false, error: null }),
+  clear: () => set({ restaurant: null, restaurantLoaded: false, menu: [], dashboard: null, dashboardLoading: false, loading: false, error: null }),
 }));

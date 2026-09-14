@@ -1,4 +1,4 @@
-export type ServiceType = "FOOD" | "GROCERY" | "VEGETABLES" | "MART" | "BIKE_TAXI" | "PARCEL";
+export type ServiceType = "FOOD" | "GROCERY" | "VEGETABLES" | "MART" | "MEDICINE" | "BIKE_TAXI" | "PARCEL";
 
 export type Address = {
   id: string;
@@ -134,16 +134,19 @@ export type DeliveryInstruction = (typeof DELIVERY_INSTRUCTIONS)[number];
 export type CartDomain = "FOOD" | "STORE";
 
 // Store product lines share the GoCart Store cart regardless of which store
-// service (Grocery/Vegetables/Mart) the product belongs to.
+// service (Grocery/Vegetables/Mart/Medicine) the product belongs to.
 export type StoreCartLineItem = {
   lineId: string;
   productId: string;
-  service: "GROCERY" | "VEGETABLES" | "MART";
+  service: "GROCERY" | "VEGETABLES" | "MART" | "MEDICINE";
   name: string;
   imageUrl?: string | null;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  // Prescription medicines show an Rx badge in the cart and are validated
+  // server-side at checkout (prescriptionProvided must be true).
+  prescriptionRequired?: boolean;
 };
 
 // Mirrors the backend's store-order bill in POST /api/v1/customer/service-orders.
@@ -250,7 +253,7 @@ export const ORDER_STATUSES = [
 ] as const;
 // Terminal states an order can also end in. They are not part of the forward
 // progress timeline, so they live outside ORDER_STATUSES.
-export const TERMINAL_ORDER_STATUSES = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED"] as const;
+export const TERMINAL_ORDER_STATUSES = ["VENDOR_REJECTED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_ADMIN", "AUTO_CANCELLED", "EXPIRED"] as const;
 export type FoodOrderStatus = (typeof ORDER_STATUSES)[number] | (typeof TERMINAL_ORDER_STATUSES)[number];
 
 export type OrderStatusEvent = {

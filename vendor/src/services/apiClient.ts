@@ -69,7 +69,7 @@ async function request<T>(path: string, init: RequestInit & { params?: Record<st
     if (error instanceof Error && error.name === "AbortError") {
       throw new ApiError("TIMEOUT", "The server took too long to respond. Check your connection and try again.");
     }
-    throw new ApiError("NETWORK_ERROR", `Couldn't reach Goocart at ${API_URL}. Make sure the backend is running and your phone is on the same Wi-Fi.`);
+    throw new ApiError("NETWORK_ERROR", "Unable to connect to Goocart. Please check your internet connection and try again.");
   } finally {
     clearTimeout(timeout);
   }

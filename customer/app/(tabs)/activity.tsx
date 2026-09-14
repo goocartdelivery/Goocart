@@ -8,7 +8,7 @@ import { OrderHistoryList, HistoryListTitle, BaseEntry } from "@/orders/OrderHis
 import { OrderListSkeleton } from "@/orders/OrderSkeleton";
 import { OrderEmptyState } from "@/orders/OrderEmpty";
 import { Hairline, MonogramTile } from "@/orders/OrderFragments";
-import { foodBucket, serviceBucket } from "@/orders/orderStatus";
+import { foodBucket, isFoodReady, isServiceReady, serviceBucket } from "@/orders/orderStatus";
 import { ActiveOrder } from "@/orders/useActiveOrders";
 import { colors, radius, spacing, typography } from "@/theme";
 import { useOrderStore } from "@/store/useOrderStore";
@@ -18,9 +18,10 @@ import { FoodOrder } from "@/types";
 
 type ActivityTab = "ORDERS" | "RIDES" | "PARCELS";
 type OrderFilter = "ALL" | "FOOD" | "STORE";
-const BUCKETS: { key: "ALL" | "ongoing" | "completed" | "cancelled"; label: string }[] = [
+const BUCKETS: { key: "ALL" | "ongoing" | "ready" | "completed" | "cancelled"; label: string }[] = [
   { key: "ALL", label: "All" },
   { key: "ongoing", label: "Ongoing" },
+  { key: "ready", label: "Ready" },
   { key: "completed", label: "Completed" },
   { key: "cancelled", label: "Cancelled" },
 ];
@@ -75,8 +76,16 @@ export default function ActivityScreen() {
   const rideOrders = serviceOrders.filter((o) => o.service === "Bike Taxi");
   const parcelOrders = serviceOrders.filter((o) => o.service === "Parcel");
 
-  const foodInBucket = (status: FoodOrder["status"]) => bucket === "ALL" || foodBucket(status) === bucket;
-  const storeInBucket = (status: string) => bucket === "ALL" || serviceBucket(status) === bucket;
+  const foodInBucket = (status: FoodOrder["status"]) => {
+    if (bucket === "ALL") return true;
+    if (bucket === "ready") return isFoodReady(status);
+    return foodBucket(status) === bucket;
+  };
+  const storeInBucket = (status: string) => {
+    if (bucket === "ALL") return true;
+    if (bucket === "ready") return isServiceReady(status);
+    return serviceBucket(status) === bucket;
+  };
 
   const visibleFood = foodOrders.filter((o) => (filter === "ALL" || filter === "FOOD") && foodInBucket(o.status));
   const visibleStore = storeOrders.filter((o) => (filter === "ALL" || filter === "STORE") && storeInBucket(o.status));

@@ -15,6 +15,23 @@ export type SearchResult = {
   items: { id: string; restaurantId: string; restaurantName: string; name: string; price: number; veg: boolean; imageUrl: string | null }[];
 };
 
+// A real dish returned by the subcategory-scoped catalog lookup
+// (GET /api/v1/catalog/dishes?q=...). Driving the Food subcategory grid.
+export type Dish = {
+  id: string;
+  restaurantId: string;
+  restaurantName: string;
+  categoryId: string;
+  name: string;
+  description: string;
+  imageUrl: string | null;
+  price: number;
+  discountPercent: number;
+  veg: boolean;
+  bestseller: boolean;
+  rating: number | null;
+};
+
 // Backed by the Goocart catalog API — no restaurant or menu data is bundled
 // into the app. Prices, availability and images come from the database at
 // runtime, so vendor edits take effect without an app release.
@@ -22,6 +39,7 @@ export interface RestaurantServiceInterface {
   listRestaurants(filter?: RestaurantFilter): Promise<Restaurant[]>;
   getRestaurantWithMenu(id: string): Promise<{ restaurant: Restaurant; categories: MenuCategory[]; items: FoodItem[] } | null>;
   searchFood(query: string): Promise<SearchResult>;
+  dishesByCategory(keywords: string[]): Promise<Dish[]>;
 }
 
 class ApiRestaurantService implements RestaurantServiceInterface {
@@ -49,6 +67,11 @@ class ApiRestaurantService implements RestaurantServiceInterface {
 
   async searchFood(query: string): Promise<SearchResult> {
     return apiGet<SearchResult>("/api/v1/catalog/search", { q: query });
+  }
+
+  async dishesByCategory(keywords: string[]): Promise<Dish[]> {
+    const data = await apiGet<{ items: Dish[] }>("/api/v1/catalog/dishes", { q: keywords.join(" ") });
+    return data.items;
   }
 }
 

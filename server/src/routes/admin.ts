@@ -1381,6 +1381,10 @@ const productDTO = (p: any) => ({
   description: p.description,
   imageUrl: p.imageUrl ?? null,
   price: p.price,
+  mrp: p.mrp ?? null,
+  unit: p.unit ?? null,
+  category: p.category ?? "",
+  prescriptionRequired: Boolean(p.prescriptionRequired ?? false),
   stock: p.stock,
   rating: p.rating,
   eta: p.eta,
@@ -1405,7 +1409,7 @@ adminRouter.post("/products", async (req: AuthedRequest, res) => {
     const price = Number(body.price);
 
     if (name.length < 2) return res.status(400).json(fail("INVALID_NAME", "Enter a product name."));
-    if (!["Grocery", "Vegetables", "Mart"].includes(service)) return res.status(400).json(fail("INVALID_SERVICE", "Service must be Grocery, Vegetables or Mart."));
+    if (!["Grocery", "Vegetables", "Mart", "Medicine"].includes(service)) return res.status(400).json(fail("INVALID_SERVICE", "Service must be Grocery, Vegetables, Mart or Medicine."));
     if (!Number.isFinite(price) || price <= 0) return res.status(400).json(fail("INVALID_PRICE", "Enter a valid price."));
 
     // Admin acts as the vendor of record for these platform-run catalogs —
@@ -1418,6 +1422,10 @@ adminRouter.post("/products", async (req: AuthedRequest, res) => {
       description: body.description ?? "",
       imageUrl: body.imageUrl || null,
       price,
+      mrp: body.mrp ? Number(body.mrp) : null,
+      unit: body.unit ? String(body.unit) : "",
+      category: body.category ? String(body.category) : "",
+      prescriptionRequired: body.prescriptionRequired === true,
       stock: Number(body.stock) || 0,
       eta: body.eta || "30–45 min",
     });
@@ -1449,6 +1457,14 @@ adminRouter.patch("/products/:id", async (req: AuthedRequest, res) => {
       if (!Number.isFinite(stock) || stock < 0) return res.status(400).json(fail("INVALID_STOCK", "Stock cannot be negative."));
       product.stock = stock;
     }
+    if (body.mrp !== undefined) {
+      const mrp = body.mrp === null || body.mrp === "" ? null : Number(body.mrp);
+      if (mrp !== null && (!Number.isFinite(mrp) || mrp < 0)) return res.status(400).json(fail("INVALID_MRP", "MRP cannot be negative."));
+      product.mrp = mrp;
+    }
+    if (body.unit !== undefined) product.unit = String(body.unit);
+    if (body.category !== undefined) product.category = String(body.category);
+    if (body.prescriptionRequired !== undefined) product.prescriptionRequired = body.prescriptionRequired === true;
     if (body.eta !== undefined) product.eta = String(body.eta);
 
     await product.save();

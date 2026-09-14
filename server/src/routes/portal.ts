@@ -23,7 +23,7 @@ import { claimDelivery } from "../lib/delivery.js";
 
 export const portalRouter = Router();
 
-const COMMERCE = ["Food", "Grocery", "Vegetables", "Mart"];
+const COMMERCE = ["Food", "Grocery", "Vegetables", "Mart", "Medicine"];
 const SERVICES = [...COMMERCE, "Bike Taxi", "Parcel"];
 const TERMINAL = ["DELIVERED", "COMPLETED", "CANCELLED_BY_ADMIN", "CANCELLED_BY_CUSTOMER", "VENDOR_REJECTED"];
 
@@ -154,6 +154,10 @@ async function buildSnapshot(user: any) {
       description: p.description,
       image_url: p.imageUrl ?? null,
       price: p.price,
+      mrp: p.mrp ?? null,
+      unit: p.unit ?? null,
+      category: p.category ?? "",
+      prescription_required: Boolean(p.prescriptionRequired ?? false),
       stock: p.stock,
       rating: p.rating,
       eta: p.eta,
@@ -214,9 +218,13 @@ portalRouter.post("/", requireAuth, async (req: AuthedRequest, res) => {
           description,
           price,
           stock,
+          mrp: body.mrp ? Number(body.mrp) : null,
+          unit: String(body.unit ?? ""),
+          category: String(body.category ?? ""),
+          prescriptionRequired: body.prescriptionRequired === true,
           eta: String(body.eta ?? "30–45 min"),
         });
-        await audit(user, "product.create", "product", String(doc._id), null, { service, name, price, stock });
+        await audit(user, "product.create", "product", String(doc._id), null, { service, name, price, stock, prescriptionRequired: doc.prescriptionRequired });
         return res.json(ok(await buildSnapshot(user), "Product created"));
       }
 

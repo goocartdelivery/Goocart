@@ -6,6 +6,8 @@ import { Stack } from "expo-router";
 import { colors } from "@/theme";
 import { useAuthStore } from "@/store/useAuthStore";
 import { initNotificationDeepLinking } from "@/services/PushService";
+import { useVendorRealtime } from "@/hooks/useVendorRealtime";
+import { NewOrderPopup } from "@/components/NewOrderPopup";
 
 export default function RootLayout() {
   // Hydrated once at the root so a persisted session survives a cold start on
@@ -14,6 +16,11 @@ export default function RootLayout() {
     void useAuthStore.getState().hydrate();
     return initNotificationDeepLinking();
   }, []);
+
+  // One global socket coordinator for the whole app: it owns order:new /
+  // order:update / acceptance_overdue / reconnect and feeds the orders store,
+  // dashboard store and the new-order popup queue.
+  useVendorRealtime();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -24,6 +31,7 @@ export default function RootLayout() {
             screens by hand risks silent mismatches for nested routes (e.g.
             "menu" vs the real route name "menu/index"). */}
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
+        <NewOrderPopup />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
