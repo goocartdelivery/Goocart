@@ -12,7 +12,7 @@ const APP_TYPE = "vendor";
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldPlaySound: false,
+    shouldPlaySound: true,
     shouldSetBadge: false,
     shouldShowBanner: true,
     shouldShowList: true,
@@ -47,7 +47,18 @@ export async function registerForPushNotifications(): Promise<void> {
     if (status !== "granted") return;
 
     if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", { name: "default", importance: Notifications.AndroidImportance.DEFAULT });
+      await Notifications.setNotificationChannelAsync("new-order", {
+        name: "New Orders",
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: "default",
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#FF6B00",
+      });
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "General",
+        importance: Notifications.AndroidImportance.DEFAULT,
+        sound: "default",
+      });
     }
 
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });

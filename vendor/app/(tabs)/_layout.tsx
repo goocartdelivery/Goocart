@@ -3,10 +3,7 @@ import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius } from "@/theme";
 import { Icon, IconName } from "@/components/Icon";
-<<<<<<< HEAD
-=======
 import { RequireVendor } from "@/components/AuthGates";
->>>>>>> c3d1d3b (vendor work)
 import { useOrdersStore } from "@/store/useOrdersStore";
 
 const ACTIVE_STATUSES = ["PLACED", "VENDOR_ACCEPTED", "PREPARING"];
@@ -29,15 +26,11 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === "android" ? 8 : 0);
 
-<<<<<<< HEAD
-  const tab = (name: string, title: string, icon: IconName, activeIcon: IconName, showBadge = false) => (
-=======
   // Badge = orders waiting for action (PLACED), kept live by the global
   // realtime hook refreshing the orders store on every order event.
   const pendingCount = useOrdersStore((s) => s.orders.filter((o) => o.status === "PLACED").length);
 
   const tab = (name: string, title: string, icon: IconName, activeIcon: IconName) => (
->>>>>>> c3d1d3b (vendor work)
     <Tabs.Screen
       key={name}
       name={name}
@@ -46,7 +39,6 @@ export default function TabsLayout() {
         tabBarIcon: ({ focused }) => (
           <View>
             <Icon name={focused ? activeIcon : icon} size={22} color={focused ? colors.primary : colors.muted} />
-            {showBadge && <OrderBadge />}
           </View>
         ),
       }}
@@ -54,31 +46,6 @@ export default function TabsLayout() {
   );
 
   return (
-<<<<<<< HEAD
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarItemStyle: { paddingVertical: 4 },
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: TAB_BAR_CONTENT_HEIGHT + bottomInset,
-          paddingBottom: bottomInset,
-          paddingTop: 6,
-          elevation: 8,
-        },
-      }}
-    >
-      {tab("home", "Home", "home", "homeActive")}
-      {tab("orders", "Orders", "orders", "ordersActive", true)}
-      {tab("menu", "Menu", "menu", "menuActive")}
-      {tab("account", "Account", "account", "accountActive")}
-    </Tabs>
-=======
     <RequireVendor>
       <Tabs
         screenOptions={{
@@ -113,7 +80,6 @@ export default function TabsLayout() {
         {tab("profile", "Profile", "account", "accountActive")}
       </Tabs>
     </RequireVendor>
->>>>>>> c3d1d3b (vendor work)
   );
 }
 

@@ -21,9 +21,20 @@ export async function notifyUser(userId: unknown, title: string, body: string, d
     const tokens = await DeviceToken.find({ userId, active: { $ne: false } }).lean();
     const messages: ExpoPushMessage[] = [];
     const tokenValues: string[] = [];
+    // Map channel to Android notification channel ID
+    const androidChannel = channel === "VENDOR" ? "new-order"
+      : channel === "DELIVERY" ? "delivery-offer"
+      : "default";
     for (const t of tokens) {
       if (!Expo.isExpoPushToken(t.token)) continue;
-      messages.push({ to: t.token, sound: "default", title, body, data });
+      messages.push({
+        to: t.token,
+        sound: "default",
+        title,
+        body,
+        data,
+        channelId: androidChannel,
+      } as ExpoPushMessage);
       tokenValues.push(t.token);
     }
     if (!messages.length) return;

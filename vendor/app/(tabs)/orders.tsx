@@ -3,15 +3,6 @@ import { Alert, RefreshControl, SectionList, StyleSheet, Text, View } from "reac
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { EmptyState } from "@/components/EmptyState";
-<<<<<<< HEAD
-import { OrderCard } from "@/components/OrderCard";
-import { SkeletonOrderCard } from "@/components/SkeletonLoader";
-import { colors, radius, spacing, typography } from "@/theme";
-import { useOrdersStore } from "@/store/useOrdersStore";
-import { useAuthStore } from "@/store/useAuthStore";
-import { getSocket } from "@/services/socket";
-import { FoodOrderStatus } from "@/types";
-=======
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Icon } from "@/components/Icon";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -20,13 +11,10 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { FoodOrder, FoodOrderStatus, hasPermission } from "@/types";
 import { mapOrderApiError } from "@/utils/orderErrors";
 import { PAYMENT_BADGE_COLORS, paymentDisplay } from "@/utils/payment";
->>>>>>> c3d1d3b (vendor work)
 
 const POLL_INTERVAL_MS = 6000;
 const ACTIVE_STATUSES: FoodOrderStatus[] = ["VENDOR_ACCEPTED", "PREPARING"];
 
-<<<<<<< HEAD
-=======
 const NEXT_STEP: Partial<Record<FoodOrderStatus, { to: FoodOrderStatus; label: string; permission: "CAN_UPDATE_ORDER_STATUS" | "CAN_MARK_READY" }>> = {
   VENDOR_ACCEPTED: { to: "PREPARING", label: "Start preparing", permission: "CAN_UPDATE_ORDER_STATUS" },
   PREPARING: { to: "READY_FOR_PICKUP", label: "Ready for pickup", permission: "CAN_MARK_READY" },
@@ -59,7 +47,6 @@ function formatCountdown(ms: number): string {
 
 type Section = { title: string; data: FoodOrder[] };
 
->>>>>>> c3d1d3b (vendor work)
 export default function OrdersScreen() {
   const { orders, loading, error, refresh, transition } = useOrdersStore();
   const user = useAuthStore((s) => s.user);
@@ -71,13 +58,7 @@ export default function OrdersScreen() {
     return () => clearInterval(interval);
   }, [refresh]);
 
-<<<<<<< HEAD
-  useEffect(() => {
-    const socket = getSocket(token);
-    if (!socket) return;
-=======
   const newestFirst = (a: FoodOrder, b: FoodOrder) => b.createdAt.localeCompare(a.createdAt);
->>>>>>> c3d1d3b (vendor work)
 
   const sections: Section[] = [];
   const newOrders = orders.filter((o) => o.status === "PLACED").sort(newestFirst);
@@ -90,8 +71,6 @@ export default function OrdersScreen() {
     try {
       await transition(id, to);
     } catch (e) {
-      // The store keeps stale data on failure; pull fresh snapshots so the
-      // user sees the real state of the order instead of a lying card.
       void refresh();
       Alert.alert("Couldn't update order", mapOrderApiError(e));
     } finally {
@@ -110,9 +89,9 @@ export default function OrdersScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={typography.h1}>Orders</Text>
-        {queue.length > 0 && (
+        {newOrders.length > 0 && (
           <View style={styles.countBadge}>
-            <Text style={styles.countText}>{queue.length}</Text>
+            <Text style={styles.countText}>{newOrders.length}</Text>
           </View>
         )}
       </View>
@@ -122,25 +101,9 @@ export default function OrdersScreen() {
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} />}
-<<<<<<< HEAD
-        ListEmptyComponent={
-          loading && orders.length === 0 ? (
-            <View style={styles.content}>
-              <SkeletonOrderCard />
-              <SkeletonOrderCard />
-            </View>
-          ) : (
-            <EmptyState icon="bag" title="No open orders" copy="New orders will appear here as customers place them." />
-          )
-        }
-        renderItem={({ item }) => (
-          <OrderCard order={item} busy={busyId === item.id} user={user} onAct={(to) => void act(item.id, to)} />
-        )}
-=======
         ListEmptyComponent={<EmptyState icon="bag" title="No open orders" copy="New orders will show up here as customers place them." />}
         renderSectionHeader={({ section }) => <Text style={styles.sectionHeader}>{section.title}</Text>}
         renderItem={({ item }) => <OrderCard order={item} busy={busyId === item.id} user={user} onAccept={() => void act(item.id, "VENDOR_ACCEPTED")} onReject={() => confirmReject(item.id)} onAdvance={(to) => void act(item.id, to)} onView={() => void router.push({ pathname: "/order/[id]", params: { id: item.id } })} />}
->>>>>>> c3d1d3b (vendor work)
         ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
         SectionSeparatorComponent={() => <View style={{ height: spacing.lg }} />}
       />
@@ -149,8 +112,6 @@ export default function OrdersScreen() {
   );
 }
 
-<<<<<<< HEAD
-=======
 function Countdown({ deadlineAt }: { deadlineAt: string }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -266,7 +227,6 @@ function OrderCard({
   );
 }
 
->>>>>>> c3d1d3b (vendor work)
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
@@ -290,8 +250,6 @@ const styles = StyleSheet.create({
   },
   countText: { ...typography.captionStrong, color: colors.white },
   content: { padding: spacing.xl, flexGrow: 1 },
-<<<<<<< HEAD
-=======
   sectionHeader: { ...typography.captionStrong, color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5, paddingBottom: spacing.xs },
   card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.lg, gap: 4 },
   cardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -315,6 +273,5 @@ const styles = StyleSheet.create({
   countdownText: { ...typography.captionStrong, color: colors.primary },
   viewOnly: { ...typography.caption, color: colors.muted, fontStyle: "italic" },
   actionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
->>>>>>> c3d1d3b (vendor work)
   error: { ...typography.caption, color: colors.error, textAlign: "center", paddingBottom: spacing.md },
 });
