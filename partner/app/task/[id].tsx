@@ -83,6 +83,24 @@ export default function TaskDetailScreen() {
     ]);
   };
 
+  const completePickup = async () => {
+    if (!id) return;
+    if (code.trim().length !== 4) {
+      setError("Enter the 4-digit pickup code the vendor gives you.");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      await transition(id, "PICKED_UP", code.trim());
+      setCode("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That pickup code didn't match. Ask the vendor to check it.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const complete = async () => {
     if (!id) return;
     if (code.trim().length !== 4) {
@@ -123,9 +141,10 @@ export default function TaskDetailScreen() {
 
   const address = order.deliveryAddress;
   const next = NEXT_STEP[order.status];
-  const awaitingOtp = order.status === "ARRIVED";
+  const awaitingPickupOtp = order.status === "ARRIVED_AT_VENDOR";
+  const awaitingDeliveryOtp = order.status === "ARRIVED";
   const delivered = order.status === "DELIVERED";
-  const lost = !next && !awaitingOtp && !delivered;
+  const lost = !next && !awaitingPickupOtp && !awaitingDeliveryOtp && !delivered;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -177,7 +196,23 @@ export default function TaskDetailScreen() {
               <Text style={styles.copy}>{order.paymentMethod === "COD" ? "Collect cash on delivery" : "Already paid online"}</Text>
             </View>
 
-            {awaitingOtp ? (
+            {awaitingPickupOtp ? (
+              <View style={styles.card}>
+                <Text style={typography.eyebrow}>PICKUP VERIFICATION</Text>
+                <Text style={styles.copy}>Ask the vendor for the 4-digit pickup code to collect this order.</Text>
+                <TextInput
+                  style={styles.otpInput}
+                  value={code}
+                  onChangeText={setCode}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  placeholder="0000"
+                  placeholderTextColor={colors.muted}
+                />
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+                <PrimaryButton label={busy ? "Please wait…" : "Confirm pickup"} onPress={() => void completePickup()} disabled={busy} />
+              </View>
+            ) : awaitingDeliveryOtp ? (
               <View style={styles.card}>
                 <Text style={typography.eyebrow}>VERIFY DELIVERY</Text>
                 <Text style={styles.copy}>Ask the customer for their 4-digit code to complete this delivery.</Text>

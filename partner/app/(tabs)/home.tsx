@@ -94,38 +94,37 @@ export default function HomeScreen() {
   );
   const servicePool = useMemo(() => serviceJobs.filter((job) => !job.partnerId && job.status === "READY_FOR_PICKUP"), [serviceJobs]);
 
-  // GPS tracking: high-frequency while a job is active, low-frequency
-  // "idle" tracking while online but jobless, and stopped when offline.
-  const trackingActiveTaskId = useRef<string | null>(null);
-  useEffect(() => {
-    const activeId = activeTask?.id ?? activeServiceJob?.id ?? null;
-    if (activeId) {
-      if (trackingActiveTaskId.current !== activeId) {
-        trackingActiveTaskId.current = activeId;
-        void startLocationTracking().then((result) => {
-          if (!result.ok) Alert.alert("Location needed", result.reason ?? "Enable location to continue this job.");
-        });
-      }
-    } else if (trackingActiveTaskId.current) {
-      trackingActiveTaskId.current = null;
-      stopLocationTracking();
-      // Resume idle tracking if still online.
-      if (online) void startIdleTracking();
-    }
-    return () => {
-      if (!activeId) stopLocationTracking();
-    };
-  }, [activeTask, activeServiceJob, online]);
+  // GPS tracking disabled for local testing — location is set via API instead.
+  // const trackingActiveTaskId = useRef<string | null>(null);
+  // useEffect(() => {
+  //   const activeId = activeTask?.id ?? activeServiceJob?.id ?? null;
+  //   if (activeId) {
+  //     if (trackingActiveTaskId.current !== activeId) {
+  //       trackingActiveTaskId.current = activeId;
+  //       void startLocationTracking().then((result) => {
+  //         if (!result.ok) Alert.alert("Location needed", result.reason ?? "Enable location to continue this job.");
+  //       });
+  //     }
+  //   } else if (trackingActiveTaskId.current) {
+  //     trackingActiveTaskId.current = null;
+  //     stopLocationTracking();
+  //     // Resume idle tracking if still online.
+  //     if (online) void startIdleTracking();
+  //   }
+  //   return () => {
+  //     if (!activeId) stopLocationTracking();
+  //   };
+  // }, [activeTask, activeServiceJob, online]);
 
-  // Start / stop idle tracking based on online toggle.
-  useEffect(() => {
-    if (online && !activeTask && !activeServiceJob) {
-      void startIdleTracking();
-    } else {
-      stopIdleTracking();
-    }
-    return () => { stopIdleTracking(); };
-  }, [online, activeTask, activeServiceJob]);
+  // GPS tracking disabled for local testing — location is set via API instead.
+  // useEffect(() => {
+  //   if (online && !activeTask && !activeServiceJob) {
+  //     void startIdleTracking();
+  //   } else {
+  //     stopIdleTracking();
+  //   }
+  //   return () => { stopIdleTracking(); };
+  // }, [online, activeTask, activeServiceJob]);
 
   const toggleOnline = async () => {
     try {

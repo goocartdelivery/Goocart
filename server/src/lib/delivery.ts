@@ -60,6 +60,15 @@ async function eligiblePartnersNear(latitude: number, longitude: number, radiusK
 
   const raw: any[] = await User.aggregate([
     {
+      $geoNear: {
+        near: { type: "Point", coordinates: [longitude, latitude] },
+        distanceField: "distanceMeters",
+        maxDistance: maxDistanceMeters,
+        spherical: true,
+        key: "location",
+      },
+    },
+    {
       $match: {
         role: "DELIVERY_PARTNER",
         status: "ACTIVE",
@@ -67,17 +76,9 @@ async function eligiblePartnersNear(latitude: number, longitude: number, radiusK
         partnerOnline: true,
         partnerBusy: false,
         location: { $exists: true, $ne: null },
+        ...(excludeIds.length > 0 ? { _id: { $nin: excludeIds.map((id) => new mongoose.Types.ObjectId(id)) } } : {}),
       },
     },
-    {
-      $geoNear: {
-        near: { type: "Point", coordinates: [longitude, latitude] },
-        distanceField: "distanceMeters",
-        maxDistance: maxDistanceMeters,
-        spherical: true,
-      },
-    },
-    ...(excludeIds.length > 0 ? [{ $match: { _id: { $nin: excludeIds.map((id) => new mongoose.Types.ObjectId(id)) } } }] : []),
     {
       $project: {
         distanceMeters: 1,

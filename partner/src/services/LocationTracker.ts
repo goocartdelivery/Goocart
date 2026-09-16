@@ -66,13 +66,23 @@ export async function startIdleTracking(): Promise<{ ok: boolean; reason?: strin
   return { ok: true };
 }
 
+function safeRemove(sub: Location.LocationSubscription | null): void {
+  if (!sub) return;
+  try {
+    sub.remove();
+  } catch {
+    // LocationEventEmitter.removeSubscription may not exist in Expo Go;
+    // the subscription will be garbage-collected regardless.
+  }
+}
+
 export function stopLocationTracking(): void {
-  activeSubscription?.remove();
+  safeRemove(activeSubscription);
   activeSubscription = null;
 }
 
 export function stopIdleTracking(): void {
-  idleSubscription?.remove();
+  safeRemove(idleSubscription);
   idleSubscription = null;
 }
 

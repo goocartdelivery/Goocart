@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, LayoutAnimation, Platform, ScrollView, StyleSheet, Text, UIManager, View } from "react-native";
+import { Alert, KeyboardAvoidingView, LayoutAnimation, Platform, ScrollView, StyleSheet, UIManager, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing } from "@/theme";
+import { OrderSegmented } from "@/orders/OrderSegmented";
 import { CartHeader } from "@/components/cart/CartHeader";
 import { RestaurantSummary } from "@/components/cart/RestaurantSummary";
 import { CartItemRow } from "@/components/cart/CartItemRow";
@@ -66,6 +67,7 @@ export default function CartScreen() {
   const [couponNotice, setCouponNotice] = useState("");
   const [customTip, setCustomTip] = useState("");
   const [hideFreeDelivery, setHideFreeDelivery] = useState(false);
+  const [cartTab, setCartTab] = useState<"FOOD" | "STORE">("FOOD");
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
 
@@ -258,99 +260,103 @@ export default function CartScreen() {
   const storeHasItems = storeItems.length > 0;
   const headerCount = totalItems + storeItemCount;
 
+  const cartTabs: { key: "FOOD" | "STORE"; label: string }[] = [
+    { key: "FOOD", label: totalItems > 0 ? `Food (${totalItems})` : "Food" },
+    { key: "STORE", label: storeItemCount > 0 ? `Store (${storeItemCount})` : "Store" },
+  ];
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <CartHeader itemCount={headerCount} restaurantName={restaurantName} onClear={foodHasItems ? handleClear : undefined} />
+      <View style={styles.tabWrap}>
+        <OrderSegmented options={cartTabs} value={cartTab} onChange={setCartTab} />
+      </View>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex} keyboardVerticalOffset={4}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* FOOD domain */}
-          <View style={styles.domain}>
-            <Text style={styles.domainLabel}>FOOD ORDER</Text>
-            {foodHasItems ? (
-              <>
-                <RestaurantSummary restaurant={restaurant} restaurantName={restaurantName} onOpenRestaurant={addMore} onAddMore={addMore} />
+          {cartTab === "FOOD" ? (
+            <View style={styles.domain}>
+              {foodHasItems ? (
+                <>
+                  <RestaurantSummary restaurant={restaurant} restaurantName={restaurantName} onOpenRestaurant={addMore} onAddMore={addMore} />
 
-                {!hideFreeDelivery && freeDeliveryCoupon ? (
-                  <FreeDeliveryProgress
-                    qualifyingTotal={bill.itemTotal}
-                    deliveryFee={pricing.deliveryFee}
-                    freeDeliveryCoupon={freeDeliveryCoupon}
-                    unlocked={freeDeliveryUnlocked}
-                    effective={freeDeliveryEffective}
-                    onApply={() => submitCoupon(freeDeliveryCoupon.code)}
-                    onSkip={() => setHideFreeDelivery(true)}
+                  {!hideFreeDelivery && freeDeliveryCoupon ? (
+                    <FreeDeliveryProgress
+                      qualifyingTotal={bill.itemTotal}
+                      deliveryFee={pricing.deliveryFee}
+                      freeDeliveryCoupon={freeDeliveryCoupon}
+                      unlocked={freeDeliveryUnlocked}
+                      effective={freeDeliveryEffective}
+                      onApply={() => submitCoupon(freeDeliveryCoupon.code)}
+                      onSkip={() => setHideFreeDelivery(true)}
+                    />
+                  ) : null}
+
+                  <View style={styles.itemsCard}>
+                    {items.map((item) => (
+                      <CartItemRow key={item.lineId} item={item} onChangeQty={(d) => handleQty(item, d)} onRemove={() => handleRemove(item)} />
+                    ))}
+                  </View>
+
+                  <DeliveryAddressSection address={selectedAddress} onManageAddress={() => router.push("/checkout/address")} />
+
+                  <CouponSection
+                    appliedCode={couponCode}
+                    inputValue={couponInput}
+                    error={couponError}
+                    notice={couponNotice || null}
+                    suggestions={suggestions}
+                    savings={bill.couponDiscount}
+                    onInputChange={(t) => {
+                      setCouponInput(t);
+                      setCouponError("");
+                    }}
+                    onApply={() => submitCoupon()}
+                    onRemove={handleRemoveCoupon}
+                    onApplySuggestion={(code) => submitCoupon(code)}
+                    onViewAll={() => router.push("/(tabs)/home")}
                   />
-                ) : null}
 
-                <View style={styles.itemsCard}>
-                  {items.map((item) => (
-                    <CartItemRow key={item.lineId} item={item} onChangeQty={(d) => handleQty(item, d)} onRemove={() => handleRemove(item)} />
-                  ))}
-                </View>
+                  <DeliveryInstructions instructions={instructions} onToggle={toggleInstruction} />
 
-                <DeliveryAddressSection address={selectedAddress} onManageAddress={() => router.push("/checkout/address")} />
+                  <TipSection
+                    tip={tip}
+                    customTip={customTip}
+                    onSelectPreset={handleTip}
+                    onCustomChange={(digits, value) => {
+                      setCustomTip(digits);
+                      animate();
+                      setTip(value);
+                    }}
+                  />
 
-                <CouponSection
-                  appliedCode={couponCode}
-                  inputValue={couponInput}
-                  error={couponError}
-                  notice={couponNotice || null}
-                  suggestions={suggestions}
-                  savings={bill.couponDiscount}
-                  onInputChange={(t) => {
-                    setCouponInput(t);
-                    setCouponError("");
-                  }}
-                  onApply={() => submitCoupon()}
-                  onRemove={handleRemoveCoupon}
-                  onApplySuggestion={(code) => submitCoupon(code)}
-                  onViewAll={() => router.push("/(tabs)/home")}
-                />
+                  <BillSummary bill={bill} couponCode={couponCode} />
 
-                <DeliveryInstructions instructions={instructions} onToggle={toggleInstruction} />
-
-                <TipSection
-                  tip={tip}
-                  customTip={customTip}
-                  onSelectPreset={handleTip}
-                  onCustomChange={(digits, value) => {
-                    setCustomTip(digits);
+                  <CheckoutBar itemCount={totalItems} total={bill.total} savings={savings} onPress={proceedToCheckout} />
+                </>
+              ) : (
+                <EmptyCart mode="food" onExplore={() => router.push("/food")} />
+              )}
+            </View>
+          ) : (
+            <View style={styles.domain}>
+              {storeHasItems ? (
+                <StoreCartSection
+                  items={storeItems}
+                  bill={storeBill}
+                  onInc={handleStoreInc}
+                  onDec={(lineId) => {
                     animate();
-                    setTip(value);
+                    handleStoreDec(lineId);
                   }}
+                  onRemove={handleStoreRemove}
+                  onClear={handleStoreClear}
+                  onCheckout={goToStoreCheckout}
                 />
-
-                <BillSummary bill={bill} couponCode={couponCode} />
-
-                <CheckoutBar itemCount={totalItems} total={bill.total} savings={savings} onPress={proceedToCheckout} />
-              </>
-            ) : (
-              <EmptyCart mode="food" onExplore={() => router.push("/food")} />
-            )}
-          </View>
-
-          {/* STORE / GO CART domain */}
-          <View style={styles.domain}>
-            {storeHasItems ? (
-              <StoreCartSection
-                items={storeItems}
-                bill={storeBill}
-                onInc={handleStoreInc}
-                onDec={(lineId) => {
-                  animate();
-                  handleStoreDec(lineId);
-                }}
-                onRemove={handleStoreRemove}
-                onClear={handleStoreClear}
-                onCheckout={goToStoreCheckout}
-              />
-            ) : (
-              <View style={styles.storeEmpty}>
-                <Text style={[styles.domainLabel, styles.storeDomainLabel]}>GO CART STORE</Text>
+              ) : (
                 <EmptyCart mode="store" onExplore={() => router.push("/(tabs)/home")} />
-              </View>
-            )}
-          </View>
+              )}
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -360,11 +366,9 @@ export default function CartScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
+  tabWrap: { marginTop: spacing.sm },
   scroll: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xl },
   domain: { gap: spacing.lg },
-  domainLabel: { ...typography.eyebrow, color: colors.muted },
-  storeDomainLabel: { color: colors.success },
-  storeEmpty: { gap: spacing.lg },
   itemsCard: {
     backgroundColor: colors.surface,
     borderRadius: 16,

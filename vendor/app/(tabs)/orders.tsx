@@ -13,7 +13,7 @@ import { mapOrderApiError } from "@/utils/orderErrors";
 import { PAYMENT_BADGE_COLORS, paymentDisplay } from "@/utils/payment";
 
 const POLL_INTERVAL_MS = 6000;
-const ACTIVE_STATUSES: FoodOrderStatus[] = ["VENDOR_ACCEPTED", "PREPARING"];
+const ACTIVE_STATUSES: FoodOrderStatus[] = ["VENDOR_ACCEPTED", "PREPARING", "READY_FOR_PICKUP"];
 
 const NEXT_STEP: Partial<Record<FoodOrderStatus, { to: FoodOrderStatus; label: string; permission: "CAN_UPDATE_ORDER_STATUS" | "CAN_MARK_READY" }>> = {
   VENDOR_ACCEPTED: { to: "PREPARING", label: "Start preparing", permission: "CAN_UPDATE_ORDER_STATUS" },
@@ -216,6 +216,8 @@ function OrderCard({
             </View>
           ) : null}
         </View>
+      ) : order.status === "READY_FOR_PICKUP" ? (
+        <PrimaryButton label="View pickup code" variant="outline" onPress={onView} />
       ) : next ? (
         canAdvance ? (
           <PrimaryButton label={busy ? "Please wait…" : next.label} onPress={() => onAdvance(next.to)} disabled={busy} />

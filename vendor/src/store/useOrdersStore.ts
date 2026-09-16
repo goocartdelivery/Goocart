@@ -8,6 +8,8 @@ type OrdersState = {
   error: string | null;
   refresh: () => Promise<void>;
   transition: (id: string, to: FoodOrderStatus) => Promise<FoodOrder>;
+  getOrder: (id: string) => FoodOrder | undefined;
+  fetchOrder: (id: string) => Promise<void>;
   clear: () => void;
 };
 
@@ -43,6 +45,15 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     const data = await apiPost<{ order: FoodOrder }>(`/api/v1/orders/${id}/transition`, { to });
     set({ orders: get().orders.map((o) => (o.id === id ? data.order : o)) });
     return data.order;
+  },
+
+  getOrder: (id) => get().orders.find((o) => o.id === id),
+
+  fetchOrder: async (id) => {
+    try {
+      const data = await apiGet<{ order: FoodOrder }>(`/api/v1/orders/${id}`);
+      set({ orders: get().orders.map((o) => (o.id === id ? data.order : o)) });
+    } catch {}
   },
 
   clear: () => set({ orders: [], loading: false, error: null }),
