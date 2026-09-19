@@ -20,12 +20,6 @@ function firstRealKey(...names) {
   return null;
 }
 
-// EAS sets EAS_BUILD for cloud builds and EAS_BUILD_LOCAL for `--local`
-// builds. That is the one place a silently-blank map is unacceptable, so a
-// release Android build without a real key fails fast instead of shipping a
-// broken map.
-const isReleaseBuild = process.env.EAS_BUILD === "true" || process.env.EAS_BUILD_LOCAL === "true";
-
 module.exports = () => {
   const expo = JSON.parse(JSON.stringify(baseConfig.expo));
 
@@ -38,18 +32,14 @@ module.exports = () => {
     "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY",
   );
 
-  if (isReleaseBuild && !androidMapsKey) {
-    throw new Error(
-      "Android release build has no Google Maps API key. Google Maps cannot " +
-        "render on Android without one, so this build would ship a blank map. " +
-        "Set GOOCART_ANDROID_GOOGLE_MAPS_API_KEY to a real key restricted to " +
-        "package com.goocart.customer (EAS Project → Environment variables, or " +
-        "`eas env:create`), then rebuild.",
-    );
-  }
-
-  // Inject keys only when real. iOS uses the default Apple Maps provider, so
-  // its key is optional; a Google key is only added if one was supplied.
+  // Inject keys only when real. The release-build validation that used to
+  // throw here has been moved to the withGoogleMapsValidation config plugin
+  // (see plugins list below) so that:
+  //   (a) app.config.js never crashes the EAS config-resolution subprocess,
+  //   (b) the check runs at prebuild time in the cloud worker where
+  //       environment variables are always injected, and
+  //   (c) local `npx expo config` and dev-server starts still work without
+  //       the key.
   if (androidMapsKey) {
     expo.android = {
       ...expo.android,
@@ -65,6 +55,14 @@ module.exports = () => {
       config: { ...expo.ios?.config, googleMapsApiKey: iosMapsKey },
     };
   }
+
+  // Register the validation plugin so release builds without a Maps key
+  // fail fast at prebuild instead of shipping a blank map.
+  const plugins = expo.plugins || [];
+  if (!plugins.some((p) => (Array.isArray(p) ? p[0] : p) === "./plugins/withGoogleMapsValidation")) {
+    plugins.push("./plugins/withGoogleMapsValidation");
+  }
+  expo.plugins = plugins;
 
   return { expo };
 };

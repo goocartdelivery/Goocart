@@ -91,12 +91,19 @@ export default function LoginScreen() {
       } else {
         setError("Could not send verification code. Please try again.");
       }
-    } catch (e) {
-      setError(
-        e instanceof ApiError
-          ? e.message
-          : "Could not send verification code. Please check your number."
-      );
+    } catch (e: any) {
+      if (__DEV__) {
+        console.warn("[login] OTP request failed:", e);
+      }
+      if (e instanceof ApiError) {
+        setError(e.message);
+      } else if (e instanceof Error && e.message) {
+        setError(e.message);
+      } else if (typeof e?.message === "string") {
+        setError(e.message);
+      } else {
+        setError("Could not send verification code. Please check your connection and try again.");
+      }
     } finally {
       setBusy(false);
     }

@@ -373,3 +373,12 @@ export type RecommendationsResponse = {
   basedOn: string[];
   items: RecommendationItem[];
 };
+
+export type StoreProductRef = {
+  productId: string;
+  service: string;
+  name: string;
+  imageUrl?: string | null;
+  price: number;
+  prescriptionRequired?: boolean;
+};

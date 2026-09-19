@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "99600183913",
+    "project_id": "goocart",
+    "storage_bucket": "goocart.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:99600183913:android:9fb58df5a03cac40dd28f8",
+        "android_client_info": {
+          "package_name": "com.goocart.customer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "99600183913-7jvsfupiuou161tibo9d75uagqmusucg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBfoazD2H5UmRgyFXrYesMJt1N24M3KWuc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "99600183913-7jvsfupiuou161tibo9d75uagqmusucg.apps.googleusercontent.com",
+              "client_type": 3  
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

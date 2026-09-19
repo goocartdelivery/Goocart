@@ -97,11 +97,11 @@ export default function ActivityScreen() {
 
   const activeFood: ActiveOrder[] = visibleFood
     .filter((o) => foodBucket(o.status) === "ongoing")
-    .map((order) => ({ kind: "food", order }))
+    .map((order) => ({ kind: "food" as const, order }))
     .sort((a, b) => b.order.createdAt.localeCompare(a.order.createdAt));
   const activeStore: ActiveOrder[] = visibleStore
     .filter((o) => serviceBucket(o.status) === "ongoing")
-    .map((order) => ({ kind: "store", order }))
+    .map((order) => ({ kind: "store" as const, order }))
     .sort((a, b) => b.order.createdAt.localeCompare(a.order.createdAt));
   const active = [...activeFood, ...activeStore];
 

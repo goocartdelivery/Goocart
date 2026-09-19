@@ -4,23 +4,35 @@
     "appVersionSource": "local"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "channel": "development"
+    },
     "production": {
       "autoIncrement": true,
+      "environment": "production",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://goo-cart.onrender.com"
       },
       "android": {
         "buildType": "app-bundle"
-      }
+      },
+      "channel": "production"
     },
     "production-apk": {
       "distribution": "internal",
+      "environment": "preview",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://goo-cart.onrender.com"
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "channel": "production-apk"
     }
   }
 }

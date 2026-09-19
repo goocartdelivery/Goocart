@@ -90,3 +90,16 @@ export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 export function apiDelete<T>(path: string): Promise<T> {
   return request<T>(path, { method: "DELETE" });
 }
+
+/**
+ * POST with an explicit Authorization header, bypassing the module-level
+ * auth token.  Used for Firebase ID token exchange where the bearer token
+ * is the Firebase token, not the Goocart session token.
+ */
+export function apiPostWithToken<T>(path: string, bearerToken: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { authorization: `Bearer ${bearerToken}` },
+  });
+}

@@ -111,10 +111,18 @@ export default function OtpVerifyScreen() {
     try {
       await verifyOtp(phone, purpose, code, purpose === "SIGNUP" ? name : undefined);
       router.replace(returnTo as Href);
-    } catch {
-      setError("Incorrect code. Please try again.");
+    } catch (e: any) {
+      if (e?.message === "NEW_USER") {
+        // Firebase verified the phone but no Goocart account exists —
+        // navigate to profile completion.
+        router.replace({
+          pathname: "/complete-profile",
+          params: { returnTo, name: name || "" },
+        } as any);
+        return;
+      }
+      setError(e?.message ?? "Incorrect code. Please try again.");
       setBusy(false);
-      // Clear the boxes so the user can retry cleanly.
       setDigits(Array(OTP_LENGTH).fill(""));
       focusIndex(0);
     }
@@ -127,8 +135,8 @@ export default function OtpVerifyScreen() {
     try {
       await requestOtp(phone, purpose);
       setCooldown(60);
-    } catch {
-      setError("Couldn't resend the code. Please try again.");
+    } catch (e: any) {
+      setError(e?.message ?? "Couldn't resend the code. Please try again.");
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { apiPost, markAuthReady, setAuthToken } from "@/services/apiClient";
+import { apiPost, apiPostWithToken, markAuthReady, setAuthToken } from "@/services/apiClient";
 import { useAddressStore } from "@/store/useAddressStore";
 import { useCartStore } from "@/store/useCartStore";
 import { useStoreCartStore } from "@/store/useStoreCartStore";
@@ -10,6 +10,7 @@ import { setActiveUserId } from "@/services/userKey";
 import { registerForPushNotifications, unregisterPushToken } from "@/services/PushService";
 import { disconnectSocket } from "@/services/socket";
 import { clearLegacyUser, clearToken, migrateLegacyToken, readLegacyUser, readToken, writeLegacyUser, writeToken } from "@/services/SessionStorage";
+import { sendFirebaseOtp, confirmFirebaseOtp, getFirebaseIdToken, firebaseSignOut, firebaseErrorMessage } from "@/services/firebaseAuth";
 import { CustomerUser } from "@/types";
 
 type AuthState = {
@@ -21,6 +22,7 @@ type AuthState = {
   signIn: (identifier: string, password: string) => Promise<void>;
   requestOtp: (identifier: string, purpose: "LOGIN" | "SIGNUP") => Promise<{ delivered: boolean; message: string }>;
   verifyOtp: (identifier: string, purpose: "LOGIN" | "SIGNUP", code: string, name?: string) => Promise<void>;
+  registerFirebaseUser: (name: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -63,18 +65,60 @@ export const useAuthStore = create<AuthState>((set) => ({
     await persist(data, set);
   },
 
-  requestOtp: async (identifier, purpose) => {
-    const res = await apiPost<{ identifier: string; delivered: boolean }>("/api/v1/auth/otp/request", { identifier, purpose });
-    return { delivered: res.delivered, message: res.delivered ? "Verification code sent via SMS" : "Verification code generated" };
+  requestOtp: async (identifier, _purpose) => {
+    try {
+      await sendFirebaseOtp(identifier);
+      return { delivered: true, message: "Verification code sent via SMS" };
+    } catch (e: any) {
+      throw new Error(firebaseErrorMessage(e));
+    }
   },
 
-  verifyOtp: async (identifier, purpose, code, name) => {
-    const data = await apiPost<TokenResponse>("/api/v1/auth/otp/verify", { identifier, purpose, code, name });
+  verifyOtp: async (_identifier, _purpose, code, _name) => {
+    // 1. Verify OTP with Firebase
+    let firebaseUser;
+    try {
+      firebaseUser = await confirmFirebaseOtp(code);
+    } catch (e: any) {
+      throw new Error(firebaseErrorMessage(e));
+    }
+
+    // 2. Get Firebase ID token
+    const idToken = await getFirebaseIdToken();
+
+    // 3. Exchange Firebase token for Goocart session
+    const data = await apiPostWithToken<TokenResponse & { newUser?: boolean; phone?: string; firebaseUid?: string }>(
+      "/api/v1/auth/firebase",
+      idToken,
+    );
+
+    // 4. Handle new user — throw a special error the UI catches to
+    //    navigate to the profile-completion screen
+    if (data.newUser) {
+      const err = new Error("NEW_USER") as any;
+      err.phone = data.phone;
+      err.firebaseUid = data.firebaseUid;
+      throw err;
+    }
+
+    // 5. Existing user — persist session
+    await persist(data as TokenResponse, set);
+  },
+
+
+  registerFirebaseUser: async (name) => {
+    const idToken = await getFirebaseIdToken();
+    const data = await apiPostWithToken<TokenResponse>("/api/v1/auth/firebase/register", idToken, { name });
     await persist(data, set);
   },
 
-
   logout: async () => {
+    try {
+      await apiPost("/api/v1/auth/logout");
+    } catch {
+      // Non-fatal: local sign out proceeds even if network or server fails
+    }
+    await firebaseSignOut();
     await unregisterPushToken();
     disconnectSocket();
     setAuthToken(null);

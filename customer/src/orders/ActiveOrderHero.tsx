@@ -6,6 +6,7 @@ import { useClock } from "@/orders/useClock";
 import { FOOD_STEPPER, STORE_STEPPER, foodEtaRemaining, orderStatusLabel, SERVICE_ETA_UNAVAILABLE } from "@/orders/orderStatus";
 import { ActiveOrder } from "@/orders/useActiveOrders";
 import { FoodOrder } from "@/types";
+import { ServiceOrder } from "@/services/ServiceOrderService";
 
 type Props = {
   entry: ActiveOrder;
