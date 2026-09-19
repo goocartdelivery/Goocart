@@ -17,6 +17,7 @@ import {
   type AuthedRequest,
 } from "../lib/auth.js";
 import { ok, fail, EMAIL_RE, PHONE_RE, normalizePhoneNumber } from "../lib/http.js";
+import { verifyFirebaseIdToken } from "../lib/firebase.js";
 
 export const authRouter = Router();
 
@@ -29,6 +30,7 @@ const otpRequestLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standard
 const otpVerifyLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 40, standardHeaders: true, legacyHeaders: false });
 const passwordResetLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
 const authAttemptLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
+const firebaseAuthLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
 const publicUser = (u: any) => ({
   id: String(u._id),
@@ -259,6 +261,145 @@ authRouter.post("/password/reset-confirm", passwordResetLimiter, async (req, res
     res.json(ok({ user: publicUser(user), token }, "Password updated"));
   } catch (e) {
     res.status(500).json(fail("PASSWORD_RESET_FAILED", e instanceof Error ? e.message : "Could not reset your password"));
+  }
+});
+
+
+// --- Firebase Phone Authentication ----------------------------------------
+// The mobile client verifies the user's phone number directly through
+// Firebase Phone Auth, then exchanges the Firebase ID token for a Goocart
+// session.  Identity comes from the cryptographically verified token —
+// never from the request body.
+
+authRouter.post("/firebase", firebaseAuthLimiter, async (req, res) => {
+  try {
+    const authHeader = req.header("authorization");
+    if (!authHeader?.toLowerCase().startsWith("bearer ")) {
+      return res.status(401).json(fail("MISSING_TOKEN", "Provide a Firebase ID token in the Authorization header"));
+    }
+    const idToken = authHeader.slice(7).trim();
+    if (!idToken) {
+      return res.status(401).json(fail("MISSING_TOKEN", "Provide a Firebase ID token in the Authorization header"));
+    }
+
+    let verified;
+    try {
+      verified = await verifyFirebaseIdToken(idToken);
+    } catch (e: any) {
+      const msg = e?.code === "auth/id-token-expired"
+        ? "Your session has expired — please sign in again"
+        : "Could not verify your identity";
+      return res.status(401).json(fail("INVALID_TOKEN", msg));
+    }
+
+    // Normalise the Firebase-verified phone to match the format stored in
+    // the database.  Firebase always provides E.164 but our normaliser adds
+    // the +91 prefix for bare Indian numbers.
+    const norm = normalizePhoneNumber(verified.phone);
+    const phone = norm.valid ? norm.normalized : verified.phone;
+
+    // 1. Try firebaseUid (fast path for returning users)
+    let user: any = await User.findOne({ firebaseUid: verified.uid });
+
+    // 2. Fall back to phone lookup (first Firebase login for existing user)
+    if (!user) {
+      user = await User.findOne({ phone });
+      if (user) {
+        // Bind this Firebase identity to the Goocart account for future
+        // logins.  Guard against the (unlikely) race where another account
+        // already claimed this UID.
+        const existing = await User.findOne({ firebaseUid: verified.uid });
+        if (existing && String(existing._id) !== String(user._id)) {
+          return res.status(409).json(fail("UID_CONFLICT", "This Firebase account is already linked to another Goocart user"));
+        }
+        user.firebaseUid = verified.uid;
+        user.phoneVerifiedAt = user.phoneVerifiedAt ?? new Date();
+        user.lastLoginAt = new Date();
+        await user.save();
+      }
+    }
+
+    // 3. No existing Goocart account — tell the client to collect a name
+    if (!user) {
+      return res.json(ok({ newUser: true, phone, firebaseUid: verified.uid }, "Complete your profile to continue"));
+    }
+
+    // 4. Account status check
+    if (user.status !== "ACTIVE") {
+      return res.status(403).json(fail("ACCOUNT_DISABLED", "This account is not active"));
+    }
+
+    // 5. Issue session (same as existing login flow)
+    user.lastLoginAt = new Date();
+    await user.save();
+    const token = await createSession(user._id, { ip: req.ip, userAgent: req.header("user-agent") });
+    setSessionCookie(res, token);
+    res.json(ok({ user: publicUser(user), token }, "Signed in"));
+  } catch (e) {
+    res.status(500).json(fail("FIREBASE_AUTH_FAILED", e instanceof Error ? e.message : "Authentication failed"));
+  }
+});
+
+authRouter.post("/firebase/register", firebaseAuthLimiter, async (req, res) => {
+  try {
+    const authHeader = req.header("authorization");
+    if (!authHeader?.toLowerCase().startsWith("bearer ")) {
+      return res.status(401).json(fail("MISSING_TOKEN", "Provide a Firebase ID token in the Authorization header"));
+    }
+    const idToken = authHeader.slice(7).trim();
+    if (!idToken) {
+      return res.status(401).json(fail("MISSING_TOKEN", "Provide a Firebase ID token in the Authorization header"));
+    }
+
+    let verified;
+    try {
+      verified = await verifyFirebaseIdToken(idToken);
+    } catch (e: any) {
+      const msg = e?.code === "auth/id-token-expired"
+        ? "Your session has expired — please sign in again"
+        : "Could not verify your identity";
+      return res.status(401).json(fail("INVALID_TOKEN", msg));
+    }
+
+    const name = String(req.body?.name ?? "").trim();
+    if (name.length < 2) {
+      return res.status(400).json(fail("INVALID_NAME", "Enter your full name"));
+    }
+
+    const norm = normalizePhoneNumber(verified.phone);
+    const phone = norm.valid ? norm.normalized : verified.phone;
+
+    // Prevent duplicate accounts
+    const existingByUid = await User.findOne({ firebaseUid: verified.uid });
+    if (existingByUid) {
+      return res.status(409).json(fail("ACCOUNT_EXISTS", "An account already exists — sign in instead"));
+    }
+    const existingByPhone = await User.findOne({ phone });
+    if (existingByPhone) {
+      return res.status(409).json(fail("PHONE_TAKEN", "An account with this mobile number already exists"));
+    }
+
+    const user = await User.create({
+      // Firebase-authed users don't have an email at signup — use a
+      // placeholder that is unique and clearly marked as pending.
+      email: `firebase-${verified.uid}@goocart.local`,
+      phone,
+      name,
+      firebaseUid: verified.uid,
+      role: "CUSTOMER",
+      status: "ACTIVE",
+      phoneVerifiedAt: new Date(),
+    });
+
+    const token = await createSession(user._id, { ip: req.ip, userAgent: req.header("user-agent") });
+    setSessionCookie(res, token);
+    res.json(ok({ user: publicUser(user), token }, "Account created"));
+  } catch (e: any) {
+    // Mongoose duplicate-key error for firebaseUid or phone
+    if (e?.code === 11000) {
+      return res.status(409).json(fail("ACCOUNT_EXISTS", "An account already exists — sign in instead"));
+    }
+    res.status(500).json(fail("REGISTRATION_FAILED", e instanceof Error ? e.message : "Registration failed"));
   }
 });
 

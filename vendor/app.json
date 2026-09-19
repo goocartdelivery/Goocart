@@ -23,7 +23,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -67,8 +68,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "VENDOR_RUN_EAS_INIT"
+        "projectId": "8095f739-132e-45f7-ba07-4b15d5768bd2"
       }
-    }
+    },
+    "owner": "khushiabhay"
   }
 }

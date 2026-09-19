@@ -11,16 +11,17 @@
       },
       "android": {
         "buildType": "app-bundle"
-      }
+      }   
     },
     "production-apk": {
-      "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://goo-cart.onrender.com"
-      },
-      "android": {
-        "buildType": "apk"
-      }
-    }
+  "distribution": "internal",
+  "environment": "preview",
+  "env": {
+    "EXPO_PUBLIC_API_URL": "https://goo-cart.onrender.com"
+  },
+  "android": {
+    "buildType": "apk"
+  }
+} 
   }
 }

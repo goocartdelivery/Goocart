@@ -49,6 +49,10 @@ const userSchema = new Schema(
     phoneVerifiedAt: { type: Date, default: null },
     lastLoginAt: { type: Date, default: null },
 
+    // Firebase Phone Auth identity — populated on first Firebase login so
+    // subsequent logins can skip the phone-number lookup.
+    firebaseUid: { type: String, default: null },
+
     // --- Customer -----------------------------------------------------
     addresses: { type: [addressSchema], default: [] },
 
@@ -101,6 +105,7 @@ userSchema.index({ phone: 1 }, { unique: true, sparse: true });
 userSchema.index({ location: "2dsphere" });
 userSchema.index({ role: 1, partnerOnline: 1, partnerApprovalStatus: 1, partnerBusy: 1 });
 userSchema.index({ role: 1, partnerOnline: 1, location: "2dsphere" });
+userSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
 
 // Keep the GeoJSON location field in sync whenever currentLatitude /
 // currentLongitude change — either via save() or updateOne() (the
