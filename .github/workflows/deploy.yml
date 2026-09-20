@@ -16,7 +16,6 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          script_stop: true
           script: |
             set -e
 
@@ -27,13 +26,11 @@ jobs:
             cd server
 
             npm ci
-
             npm run build
 
             pm2 reload ecosystem.config.cjs --update-env
+            pm2 save
 
             curl -f http://127.0.0.1:3001/health
 
-            pm2 save
-
-            echo "Deployment successful!"
+            echo "Deployment successful"
