@@ -16,21 +16,68 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 30m
           script: |
             set -e
 
+            echo "========================================="
+            echo "🚀 Starting GoCart Deployment"
+            echo "========================================="
+
             cd /var/www/gocart-api
 
+            echo "📥 Pulling latest code..."
             git pull --ff-only origin main
 
+            echo "📂 Entering server..."
             cd server
 
+            echo "📦 Installing dependencies..."
             npm ci
+
+            echo "🏗️ Building project..."
             npm run build
 
+            echo "♻️ Reloading PM2..."
             pm2 reload ecosystem.config.cjs --update-env
+
+            echo "💾 Saving PM2..."
             pm2 save
 
-            curl -f http://127.0.0.1:3001/health
+            echo "⏳ Waiting for application..."
 
-            echo "Deployment successful"
+            SUCCESS=false
+
+            for i in {1..15}; do
+              echo "Attempt $i/15..."
+
+              if curl -fs http://127.0.0.1:3001/health > /dev/null; then
+                SUCCESS=true
+                break
+              fi
+
+              sleep 2
+            done
+
+            if [ "$SUCCESS" = false ]; then
+              echo "❌ Health check failed"
+
+              echo ""
+              echo "========== PM2 STATUS =========="
+              pm2 status
+
+              echo ""
+              echo "========== PM2 LOGS =========="
+              pm2 logs gocart-api --lines 100 --nostream
+
+              exit 1
+            fi
+
+            echo ""
+            echo "========== HEALTH =========="
+            curl http://127.0.0.1:3001/health
+
+            echo ""
+            echo "========================================="
+            echo "✅ Deployment Successful!"
+            echo "========================================="
