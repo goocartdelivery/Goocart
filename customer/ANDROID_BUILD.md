@@ -2,7 +2,7 @@
 
 - Display name: `Goocart Customer`
 - Android application ID: `com.goocart.customer`
-- Production API: `https://goo-cart.onrender.com`
+- Production API: `https://api.yetrixtechnologies.com`
 - App icon and adaptive icon assets: `assets/images/`
 - Signing prefix: `GOOCART_`
 

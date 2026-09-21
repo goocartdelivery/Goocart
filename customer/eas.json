@@ -16,7 +16,7 @@
       "autoIncrement": true,
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://goo-cart.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://api.yetrixtechnologies.com"
       },
       "android": {
         "buildType": "app-bundle"
@@ -27,12 +27,26 @@
       "distribution": "internal",
       "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://goo-cart.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://api.yetrixtechnologies.com"
       },
       "android": {
         "buildType": "apk"
       },
       "channel": "production-apk"
+    },
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.yetrixtechnologies.com"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "channel": "preview"
     }
   }
 }
+
+
+

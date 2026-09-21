@@ -13,7 +13,7 @@ import { Platform } from "react-native";
 // If neither works we surface `apiConfigError` and let the UI show a clear
 // message. Throwing here would crash the app before it can render anything.
 
-const PRODUCTION_API_URL = "https://goo-cart.onrender.com";
+const PRODUCTION_API_URL = "https://api.yetrixtechnologies.com";
 const DEV_BACKEND_PORT = 3001;
 
 function resolveProductionUrl(explicit?: string): { url: string; error: string | null } {
@@ -53,10 +53,22 @@ function inferDevHost(): string | null {
 }
 
 function resolve(): { url: string; error: string | null } {
-  const explicit = process.env.EXPO_PUBLIC_API_URL?.trim();
+  let explicit = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (!__DEV__) return resolveProductionUrl(explicit);
 
-  if (explicit) return { url: explicit.replace(/\/$/, ""), error: null };
+  if (explicit) {
+    let url = explicit.replace(/\/$/, "");
+    if (Platform.OS === "web" && url.includes("10.0.2.2")) {
+      const hostname = typeof window !== "undefined" && window.location?.hostname ? window.location.hostname : "localhost";
+      url = url.replace("10.0.2.2", hostname);
+    }
+    return { url, error: null };
+  }
+
+  if (Platform.OS === "web") {
+    const hostname = typeof window !== "undefined" && window.location?.hostname ? window.location.hostname : "localhost";
+    return { url: `http://${hostname}:${DEV_BACKEND_PORT}`, error: null };
+  }
 
   const host = inferDevHost();
   if (host) return { url: `http://${host}:${DEV_BACKEND_PORT}`, error: null };

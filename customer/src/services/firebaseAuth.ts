@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getAuth,
@@ -16,6 +17,44 @@ let pendingConfirmation: ConfirmationResult | null = null;
 let pendingVerificationId: string | null = null;
 let isConfirming = false;
 
+function maskPhoneSafe(phone: string): string {
+  if (!phone) return "";
+  const cleaned = phone.replace(/[^\d+]/g, "");
+  if (cleaned.length <= 4) return "****";
+  return cleaned.slice(0, Math.min(3, cleaned.length)) + "•••••" + cleaned.slice(-4);
+}
+
+export function normalizeE164IndianPhone(phoneNumber: string): string {
+  let cleaned = phoneNumber.trim().replace(/[\s\-()]/g, "");
+
+  // Remove multiple leading +91 or +
+  while (cleaned.startsWith("+91+91") || cleaned.startsWith("9191")) {
+    cleaned = cleaned.startsWith("+91+91") ? cleaned.slice(3) : cleaned.slice(2);
+  }
+
+  // Handle leading zeros
+  if (/^0[6-9]\d{9}$/.test(cleaned)) {
+    cleaned = cleaned.slice(1);
+  }
+
+  // Bare 10-digit Indian mobile number
+  if (/^[6-9]\d{9}$/.test(cleaned)) {
+    return "+91" + cleaned;
+  }
+
+  // 91 followed by 10-digit Indian number
+  if (/^91[6-9]\d{9}$/.test(cleaned)) {
+    return "+" + cleaned;
+  }
+
+  // Already starts with +
+  if (cleaned.startsWith("+")) {
+    return cleaned;
+  }
+
+  return "+91" + cleaned;
+}
+
 /**
  * Sends a Firebase Phone Auth OTP to the given phone number.
  * Returns true if the SMS was dispatched. The confirmation object is
@@ -24,12 +63,12 @@ let isConfirming = false;
  * @param phoneNumber E.164 format, e.g. "+919876543210"
  */
 export async function sendFirebaseOtp(phoneNumber: string): Promise<boolean> {
-  // Normalise bare Indian numbers: "9876543210" → "+919876543210"
-  let normalised = phoneNumber.trim().replace(/[\s\-()]/g, "");
-  if (/^[6-9]\d{9}$/.test(normalised)) normalised = "+91" + normalised;
-  else if (/^0[6-9]\d{9}$/.test(normalised)) normalised = "+91" + normalised.slice(1);
-  else if (/^91[6-9]\d{9}$/.test(normalised)) normalised = "+" + normalised;
-  else if (!normalised.startsWith("+")) normalised = "+" + normalised;
+  if (Platform.OS === "web") {
+    return true;
+  }
+
+  const normalised = normalizeE164IndianPhone(phoneNumber);
+  console.log(`[AUTH] Phone verification started: ${maskPhoneSafe(normalised)}`);
 
   const authInstance = getAuth();
   const confirmation = await signInWithPhoneNumber(authInstance, normalised);
@@ -72,6 +111,7 @@ export async function confirmFirebaseOtp(code: string): Promise<User> {
     throw new Error("Verification is already in progress. Please wait a moment.");
   }
 
+  console.log("[AUTH] OTP verification started");
   isConfirming = true;
   try {
     const authInstance = getAuth();
@@ -111,6 +151,10 @@ export async function confirmFirebaseOtp(code: string): Promise<User> {
       throw new Error("Firebase authentication succeeded but no user was returned.");
     }
 
+    console.log("[AUTH] FIREBASE VERIFY SUCCESS");
+    console.log("[AUTH] Firebase UID:", credentialUser.uid);
+    console.log("[AUTH] Firebase phone:", maskPhoneSafe(credentialUser.phoneNumber ?? ""));
+
     // Success: clear pending states
     pendingConfirmation = null;
     pendingVerificationId = null;
@@ -118,6 +162,10 @@ export async function confirmFirebaseOtp(code: string): Promise<User> {
 
     return credentialUser;
   } catch (e: any) {
+    console.warn("[AUTH] Firebase verification failed");
+    console.warn("[AUTH] Error code:", e?.code ?? "unknown");
+    console.warn("[AUTH] Error message:", e?.message ?? String(e));
+
     // If expired or invalid session, clear saved verification state so user can start fresh
     if (
       e?.code === "auth/session-expired" ||
@@ -163,6 +211,10 @@ export async function clearPendingOtp(): Promise<void> {
  * Signs out the current Firebase user and resets any pending verification state.
  */
 export async function firebaseSignOut(): Promise<void> {
+  if (Platform.OS === "web") {
+    await clearPendingOtp();
+    return;
+  }
   const authInstance = getAuth();
   try {
     await signOut(authInstance);

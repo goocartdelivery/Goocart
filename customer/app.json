@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Goocart Customer",
+    "name": "Goocart",
     "slug": "goocart-customer",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -17,7 +17,7 @@
     "android": {
       "package": "com.goocart.customer",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 2,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#FF6B35",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

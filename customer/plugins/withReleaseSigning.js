@@ -1,4 +1,6 @@
-const { withAppBuildGradle } = require("expo/config-plugins");
+const { withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
+const fs = require("fs");
+const path = require("path");
 
 /**
  * Re-applies the release signing config after `expo prebuild`.
@@ -29,6 +31,24 @@ const RELEASE_SIGNING_BLOCK = `            if (project.hasProperty('${STORE_PROP
             }`;
 
 module.exports = function withReleaseSigning(config) {
+  // Ensure android/gradle.properties exists before base mods run so that
+  // withAndroidGradlePropertiesBaseMod does not throw ENOENT when android/
+  // is present without a gradle.properties file (e.g. on clean cloud workers
+  // or partial checkouts).
+  config = withDangerousMod(config, [
+    "android",
+    async (mod) => {
+      const platformRoot = mod.modRequest.platformProjectRoot;
+      const gradlePropertiesPath = path.join(platformRoot, "gradle.properties");
+      if (!fs.existsSync(gradlePropertiesPath)) {
+        if (!fs.existsSync(platformRoot)) {
+          await fs.promises.mkdir(platformRoot, { recursive: true });
+        }
+        await fs.promises.writeFile(gradlePropertiesPath, "");
+      }
+      return mod;
+    },
+  ]);
   return withAppBuildGradle(config, (mod) => {
     let contents = mod.modResults.contents;
 
