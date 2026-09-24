@@ -1,6 +1,5 @@
 import { Platform } from "react-native";
 import { create } from "zustand";
-import { API_URL } from "@/config/environment";
 import { apiPost, apiPostWithToken, markAuthReady, setAuthToken, ApiError } from "@/services/apiClient";
 import { useAddressStore } from "@/store/useAddressStore";
 import { useCartStore } from "@/store/useCartStore";
@@ -184,20 +183,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     let idToken: string;
     try {
       idToken = await getFirebaseIdToken();
-      console.log("[AUTH] Firebase ID token received:", Boolean(idToken));
     } catch (e: any) {
-      console.warn("[AUTH] Firebase ID token retrieval failed:", e?.code ?? "unknown", e?.message ?? String(e));
       throw new Error("Could not retrieve authentication credentials. Please try again.");
     }
 
     // 3. Exchange Firebase token for Goocart session
-    console.log("[AUTH] Backend request started");
-    console.log("[AUTH] API URL:", API_URL);
-    console.log("[AUTH] HTTP method: POST");
-    console.log("[AUTH] Endpoint: /api/v1/auth/firebase");
-    console.log("[AUTH] Token attached:", Boolean(idToken));
-    console.log("[AUTH] Token length:", idToken ? idToken.length : 0);
-
     let data: TokenResponse & { newUser?: boolean; phone?: string; firebaseUid?: string };
     try {
       data = await apiPostWithToken<TokenResponse & { newUser?: boolean; phone?: string; firebaseUid?: string }>(
@@ -205,7 +195,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         idToken,
       );
     } catch (err: any) {
-      console.warn("[AUTH] Backend request failed:", err instanceof ApiError ? `HTTP ${err.status} [${err.code}] ${err.message}` : err?.message);
       if (err instanceof ApiError) {
         if (err.status === 401) {
           throw new Error(err.message || "Authentication token was rejected by the server.");

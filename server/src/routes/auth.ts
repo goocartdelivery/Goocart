@@ -293,7 +293,6 @@ authRouter.post("/firebase", firebaseAuthLimiter, async (req, res) => {
     try {
       verified = await verifyFirebaseIdToken(idToken);
     } catch (e: any) {
-      console.error("[FIREBASE-DEBUG] verify failed:", e?.code ?? "", e?.message ?? String(e));
       const msg = e?.code === "auth/id-token-expired"
         ? "Your session has expired — please sign in again"
         : "Could not verify your identity";

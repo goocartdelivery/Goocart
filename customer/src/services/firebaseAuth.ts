@@ -17,13 +17,6 @@ let pendingConfirmation: ConfirmationResult | null = null;
 let pendingVerificationId: string | null = null;
 let isConfirming = false;
 
-function maskPhoneSafe(phone: string): string {
-  if (!phone) return "";
-  const cleaned = phone.replace(/[^\d+]/g, "");
-  if (cleaned.length <= 4) return "****";
-  return cleaned.slice(0, Math.min(3, cleaned.length)) + "•••••" + cleaned.slice(-4);
-}
-
 export function normalizeE164IndianPhone(phoneNumber: string): string {
   let cleaned = phoneNumber.trim().replace(/[\s\-()]/g, "");
 
@@ -68,7 +61,6 @@ export async function sendFirebaseOtp(phoneNumber: string): Promise<boolean> {
   }
 
   const normalised = normalizeE164IndianPhone(phoneNumber);
-  console.log(`[AUTH] Phone verification started: ${maskPhoneSafe(normalised)}`);
 
   const authInstance = getAuth();
   const confirmation = await signInWithPhoneNumber(authInstance, normalised);
@@ -111,7 +103,6 @@ export async function confirmFirebaseOtp(code: string): Promise<User> {
     throw new Error("Verification is already in progress. Please wait a moment.");
   }
 
-  console.log("[AUTH] OTP verification started");
   isConfirming = true;
   try {
     const authInstance = getAuth();
@@ -151,10 +142,6 @@ export async function confirmFirebaseOtp(code: string): Promise<User> {
       throw new Error("Firebase authentication succeeded but no user was returned.");
     }
 
-    console.log("[AUTH] FIREBASE VERIFY SUCCESS");
-    console.log("[AUTH] Firebase UID:", credentialUser.uid);
-    console.log("[AUTH] Firebase phone:", maskPhoneSafe(credentialUser.phoneNumber ?? ""));
-
     // Success: clear pending states
     pendingConfirmation = null;
     pendingVerificationId = null;
@@ -162,10 +149,6 @@ export async function confirmFirebaseOtp(code: string): Promise<User> {
 
     return credentialUser;
   } catch (e: any) {
-    console.warn("[AUTH] Firebase verification failed");
-    console.warn("[AUTH] Error code:", e?.code ?? "unknown");
-    console.warn("[AUTH] Error message:", e?.message ?? String(e));
-
     // If expired or invalid session, clear saved verification state so user can start fresh
     if (
       e?.code === "auth/session-expired" ||

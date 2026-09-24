@@ -48,13 +48,10 @@ function ensureApp(): void {
   }
 
   const keyJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
-  console.log("[FIREBASE-DEBUG] env present:", Boolean(keyJson), "| length:", keyJson?.length ?? 0, "| starts with:", keyJson?.slice(0, 40));
   if (keyJson) {
     const serviceAccount = parseServiceAccount(keyJson);
-    console.log("[FIREBASE-DEBUG] parsed project_id:", serviceAccount.projectId, "| has private_key:", Boolean(serviceAccount.privateKey));
     initializeApp({ credential: cert(serviceAccount) });
     initialised = true;
-    console.log("[FIREBASE-DEBUG] Firebase Admin initialized OK");
     return;
   }
 
