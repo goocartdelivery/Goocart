@@ -240,7 +240,7 @@ function AdminAutomation(){
   </WorkspacePage>;
 }
 
-type AdminRestaurant = { id:string; name:string; imageUrl:string|null; area:string; address:string; latitude:number; longitude:number; isOpen:boolean; status:string; rating:number; ratingCount:number; commissionPercent:number|null; effectiveCommissionPercent:number; totalOrders:number; totalOrderValue:number; commissionPayout:number; manualOrderAcceptance:boolean; autoAcceptanceMode:"MANUAL"|"AUTOMATIC"|"SMART_AUTOMATIC"; temporaryBusyMode:boolean; maxSimultaneousOrders:number; averagePreparationMinutes:number; maximumQueue:number; owner:{id:string;name:string;email:string;username:string|null}|null; offers:{id:string;title:string;description:string|null}[] };
+type AdminRestaurant = { id:string; name:string; imageUrl:string|null; area:string; address:string; businessType:string|null; latitude:number; longitude:number; isOpen:boolean; status:string; rating:number; ratingCount:number; commissionPercent:number|null; effectiveCommissionPercent:number; totalOrders:number; totalOrderValue:number; commissionPayout:number; manualOrderAcceptance:boolean; autoAcceptanceMode:"MANUAL"|"AUTOMATIC"|"SMART_AUTOMATIC"; temporaryBusyMode:boolean; maxSimultaneousOrders:number; averagePreparationMinutes:number; maximumQueue:number; owner:{id:string;name:string;email:string;phone:string|null;username:string|null}|null; offers:{id:string;title:string;description:string|null}[] };
 type AdminVendorUser = { id:string; name:string; email:string; username?:string|null; role:string; status:string };
 type AdminVendorTeamMember = { id:string; name:string; email:string; phone:string|null; role:string; status:string; staffTitle:string|null; isPrimaryOwner:boolean; permissions:string[] };
 async function adminApi<T>(path:string,init?:RequestInit):Promise<T>{const res=await fetch(`/api/v1/admin${path}`,{...init,headers:{"content-type":"application/json",...init?.headers}});const json=await res.json() as {success:boolean;data?:T;error?:{message:string}};if(!json.success||!json.data)throw new Error(json.error?.message||"Request failed");return json.data;}
@@ -253,11 +253,12 @@ function AdminVendors(){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [showCreate,setShowCreate]=useState(false);
+  const [created,setCreated]=useState<{name:string;vendorId:string;address:string;area:string;businessType:string;ownerName:string;username:string;email:string;phone:string;password:string;menuRestaurant:Pick<AdminRestaurant,"id"|"name">}|null>(null);
   const [editing,setEditing]=useState<string|null>(null);
   const [expanded,setExpanded]=useState<string|null>(null);
   const [expandedOffers,setExpandedOffers]=useState<string|null>(null);
   const [expandedAutomation,setExpandedAutomation]=useState<string|null>(null);
-  const [menuFor,setMenuFor]=useState<AdminRestaurant|null>(null);
+  const [menuFor,setMenuFor]=useState<Pick<AdminRestaurant,"id"|"name">|null>(null);
   const load=useCallback(async()=>{try{const [r,v]=await Promise.all([adminApi<{restaurants:AdminRestaurant[]}>("/restaurants"),adminApi<{vendors:AdminVendorUser[]}>("/vendors")]);setRestaurants(r.restaurants);setVendors(v.vendors);setError("");}catch(e){setError(e instanceof Error?e.message:"Could not load vendors");}},[]);
   useEffect(()=>{const initial=setTimeout(()=>void load(),0);return()=>clearTimeout(initial);},[load]);
   const assign=async(restaurantId:string,userId:string)=>{setBusy(true);try{await adminApi(`/restaurants/${restaurantId}/owner`,{method:"PATCH",body:JSON.stringify({userId:userId||null})});await load();}catch(e){setError(e instanceof Error?e.message:"Could not assign owner");}finally{setBusy(false);}};
@@ -275,12 +276,13 @@ function AdminVendors(){
       ["4","Manage team","Add managers or staff and give only the permissions they need."],
     ]}/>
     <PrimaryActionButton label={showCreate?"Cancel":"+ Create Vendor"} onClick={()=>setShowCreate(!showCreate)}/>
-    {showCreate&&<CreateVendorForm onCreated={()=>{setShowCreate(false);void load();}}/>}
+    {showCreate&&<CreateVendorForm onCreated={(record)=>{setShowCreate(false);setCreated(record);void load();}}/>}
+    {created&&<AccountCreatedNotice title="Vendor created — credentials" onDismiss={()=>setCreated(null)} action={{label:"+ Add menu",onClick:()=>setMenuFor(created.menuRestaurant)}} details={[["Business",created.name],["Vendor ID",created.vendorId],["Address",[created.address,created.area].filter(Boolean).join(", ")],["Business type",created.businessType],["Owner",created.ownerName],["Login",created.username?`@${created.username} • ${created.email}`:created.email],["Phone",created.phone],["Temporary password",created.password]]}/>}
     {restaurants===null?<Empty title="Loading…" copy="Fetching restaurants and vendor accounts."/>:!restaurants.length?<Empty title="No restaurants yet" copy="Create one above, or seed the catalog to see restaurants here."/>:
     <div className="directory">{restaurants.map((r)=><article key={r.id} className="vendor-row">
       <div className="vendor-row-head">
         {r.imageUrl?<img src={r.imageUrl} alt="" className="vendor-thumb"/>:<i>{r.name[0]}</i>}
-        <span><b>{r.name}</b><small>Vendor ID {r.id}{r.owner?.username?` • @${r.owner.username}`:""} • {r.area} • {r.isOpen?"Open":"Closed"} • {r.status} • {label(r.autoAcceptanceMode)}{r.temporaryBusyMode?" • Busy mode":""}{r.owner?` • Owned by ${r.owner.name}`:" • Unassigned"}</small></span>
+        <span><b>{r.name}</b><small>Vendor ID {r.id}{r.businessType?` • ${r.businessType}`:""} • {r.address}{r.area?` • ${r.area}`:""} • {r.isOpen?"Open":"Closed"} • {r.status} • {label(r.autoAcceptanceMode)}{r.temporaryBusyMode?" • Busy mode":""}{r.owner?` • Owner: ${r.owner.name} (${r.owner.email}${r.owner.phone?` • ${r.owner.phone}`:""})`:" • Unassigned"}</small></span>
         <button className="toggle-labelled" onClick={()=>void toggleManual(r)} disabled={busy} title="Require Vendor Order Acceptance">
           <span className={r.manualOrderAcceptance?"toggle on":"toggle"}><i/></span>
           <small>{r.manualOrderAcceptance?"Manual accept ON":"Auto-accept ON"}</small>
@@ -316,22 +318,19 @@ function PrimaryActionButton({label,onClick}:{label:string;onClick:()=>void}){re
 
 function FlowSteps({steps}:{steps:[string,string,string][]}){return <div className="flow-steps">{steps.map((step)=><article key={step[0]}><i>{step[0]}</i><span><b>{step[1]}</b><small>{step[2]}</small></span></article>)}</div>;}
 
-function CreateVendorForm({onCreated}:{onCreated:()=>void}){
+function AccountCreatedNotice({title,details,onDismiss,action}:{title:string;details:[string,string][];onDismiss:()=>void;action?:{label:string;onClick:()=>void}}){return <div className="auth-form inline-form"><p><b>{title}</b></p><div className="vendor-stats">{details.filter(([,value])=>value).map(([key,value])=><span key={key}><small>{key}</small><b>{value}</b></span>)}</div><div className="vendor-row-actions">{action&&<button type="button" className="primary" onClick={action.onClick}>{action.label}</button>}<button type="button" className="secondary" onClick={onDismiss}>Dismiss</button></div></div>;}
+
+function CreateVendorForm({onCreated}:{onCreated:(record:{name:string;vendorId:string;address:string;area:string;businessType:string;ownerName:string;username:string;email:string;phone:string;password:string;menuRestaurant:Pick<AdminRestaurant,"id"|"name">})=>void}){
   const [form,setForm]=useState({name:"",imageUrl:"",area:"",address:"",businessType:"",commissionPercent:"",ownerName:"",ownerUsername:"",ownerEmail:"",ownerPhone:"",initialPassword:"",manualOrderAcceptance:true});
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
-  const [created,setCreated]=useState<{name:string;vendorId:string;username:string;email:string;password:string}|null>(null);
   const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError("");
     try{
-      const res=await adminApi<{restaurant:{id:string}}>("/restaurants",{method:"POST",body:JSON.stringify({name:form.name,imageUrl:form.imageUrl||null,area:form.area,address:form.address,businessType:form.businessType||null,commissionPercent:form.commissionPercent===""?null:Number(form.commissionPercent),ownerName:form.ownerName,ownerUsername:form.ownerUsername||undefined,ownerEmail:form.ownerEmail,ownerPhone:form.ownerPhone||undefined,initialPassword:form.initialPassword,manualOrderAcceptance:form.manualOrderAcceptance})});
-      setCreated({name:form.name,vendorId:res.restaurant.id,username:form.ownerUsername,email:form.ownerEmail,password:form.initialPassword});
-      onCreated();
+      const res=await adminApi<{restaurant:Pick<AdminRestaurant,"id"|"name">}>("/restaurants",{method:"POST",body:JSON.stringify({name:form.name,imageUrl:form.imageUrl||null,area:form.area,address:form.address,businessType:form.businessType||null,commissionPercent:form.commissionPercent===""?null:Number(form.commissionPercent),ownerName:form.ownerName,ownerUsername:form.ownerUsername||undefined,ownerEmail:form.ownerEmail,ownerPhone:form.ownerPhone||undefined,initialPassword:form.initialPassword,manualOrderAcceptance:form.manualOrderAcceptance})});
+      const record={name:form.name,vendorId:res.restaurant.id,address:form.address,area:form.area,businessType:form.businessType,ownerName:form.ownerName,username:form.ownerUsername,email:form.ownerEmail,phone:form.ownerPhone,password:form.initialPassword,menuRestaurant:res.restaurant};
+      onCreated(record);
     }catch(e){setError(e instanceof Error?e.message:"Could not create vendor");}finally{setBusy(false);}
   };
-  if(created)return <div className="auth-form inline-form">
-    <p><b>{created.name}</b> was created.</p>
-    <p className="muted-note">Vendor ID: <b>{created.vendorId}</b>{created.username?<> • Username: <b>{created.username}</b></>:null}<br/>Login email: <b>{created.email}</b> • Temporary password: <b>{created.password}</b><br/>A welcome email with these credentials was sent to the vendor (delivery depends on email being configured on this server).</p>
-  </div>;
   return <form className="auth-form inline-form" onSubmit={(e)=>void submit(e)}>
     <ImageUploadField label="Shop / restaurant photo" value={form.imageUrl} onChange={(imageUrl)=>setForm({...form,imageUrl})}/>
     <label>Business (shop / restaurant) name<input required value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})}/></label>
@@ -535,7 +534,7 @@ function VendorPercentOffersPanel({restaurantId}:{restaurantId:string}){
 
 type AdminMenuItem = { id:string; name:string; description:string; imageUrl:string|null; price:number; discountPercent:number; veg:boolean; available:boolean; categoryId:string };
 
-function VendorMenuGrid({restaurant,onBack}:{restaurant:AdminRestaurant;onBack:()=>void}){
+function VendorMenuGrid({restaurant,onBack}:{restaurant:Pick<AdminRestaurant,"id"|"name">;onBack:()=>void}){
   const [items,setItems]=useState<AdminMenuItem[]|null>(null);
   const [showAdd,setShowAdd]=useState(false);
   const [editingItem,setEditingItem]=useState<AdminMenuItem|null>(null);
@@ -626,6 +625,7 @@ type AdminPartnerRow = { id:string; name:string; email:string; phone:string|null
 function AdminPartners(){
   const [partners,setPartners]=useState<AdminPartnerRow[]|null>(null);
   const [showCreate,setShowCreate]=useState(false);
+  const [created,setCreated]=useState<{name:string;partnerId:string;email:string;phone:string;vehicle:string;approval:string;password:string}|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const load=useCallback(async()=>{try{const r=await adminApi<{partners:AdminPartnerRow[]}>("/partners");setPartners(r.partners);setError("");}catch(e){setError(e instanceof Error?e.message:"Could not load delivery partners");}},[]);
@@ -643,7 +643,8 @@ function AdminPartners(){
       ["4","Partner goes online","The Partner app receives offers only after online + location update."],
     ]}/>
     <PrimaryActionButton label={showCreate?"Cancel":"+ Create Delivery Partner"} onClick={()=>setShowCreate(!showCreate)}/>
-    {showCreate&&<CreatePartnerForm onCreated={()=>{setShowCreate(false);void load();}}/>}
+    {created&&<AccountCreatedNotice title="Delivery partner created" onDismiss={()=>setCreated(null)} details={[["Partner",created.name],["Partner ID",created.partnerId],["Login",created.email],["Phone",created.phone],["Vehicle",created.vehicle],["Approval",created.approval],["Temporary password",created.password]]}/>}
+    {showCreate&&<CreatePartnerForm onCreated={(record)=>{setShowCreate(false);setCreated(record);void load();}}/>}
     {partners===null?<Empty title="Loading…" copy="Fetching delivery partners."/>:!partners.length?<Empty title="No delivery partners yet" copy="Create one above to get started."/>:
     <div className="directory">{partners.map((p)=><article key={p.id}>
       {p.photoUrl?<img src={p.photoUrl} alt="" className="vendor-thumb"/>:<i>{p.name[0]||"?"}</i>}
@@ -656,11 +657,10 @@ function AdminPartners(){
   </WorkspacePage>;
 }
 
-function CreatePartnerForm({onCreated}:{onCreated:()=>void}){
+function CreatePartnerForm({onCreated}:{onCreated:(record:{name:string;partnerId:string;email:string;phone:string;vehicle:string;approval:string;password:string})=>void}){
   const [form,setForm]=useState({name:"",email:"",phone:"",photoUrl:"",vehicleType:"Bike",vehicleNumber:"",licenceNumber:"",aadhaarNumber:"",panNumber:"",bankAccountNumber:"",bankIfsc:"",bankAccountHolderName:"",initialPassword:"",approveNow:true});
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
-  const [created,setCreated]=useState<{name:string;partnerId:string;email:string;password:string}|null>(null);
   const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError("");
     try{
       const res=await adminApi<{partner:{id:string}}>("/partners",{method:"POST",body:JSON.stringify({
@@ -670,15 +670,11 @@ function CreatePartnerForm({onCreated}:{onCreated:()=>void}){
         bankDetails:(form.bankAccountNumber||form.bankIfsc||form.bankAccountHolderName)?{accountNumber:form.bankAccountNumber,ifsc:form.bankIfsc,accountHolderName:form.bankAccountHolderName}:null,
         initialPassword:form.initialPassword,approveNow:form.approveNow,
       })});
-      setCreated({name:form.name,partnerId:res.partner.id,email:form.email,password:form.initialPassword});
-      onCreated();
+      const record={name:form.name,partnerId:res.partner.id,email:form.email,phone:form.phone,vehicle:[form.vehicleType,form.vehicleNumber].filter(Boolean).join(" • "),approval:form.approveNow?"Approved":"Pending approval",password:form.initialPassword};
+      onCreated(record);
     }
     catch(e){setError(e instanceof Error?e.message:"Could not create this delivery partner");}finally{setBusy(false);}
   };
-  if(created)return <div className="auth-form inline-form">
-    <p><b>{created.name}</b> was created.</p>
-    <p className="muted-note">Partner ID: <b>{created.partnerId}</b><br/>Login email: <b>{created.email}</b> • Temporary password: <b>{created.password}</b><br/>A welcome email with these credentials was sent to the partner (delivery depends on email being configured on this server).</p>
-  </div>;
   return <form className="auth-form inline-form" onSubmit={(e)=>void submit(e)}>
     <ImageUploadField label="Partner photo" value={form.photoUrl} onChange={(photoUrl)=>setForm({...form,photoUrl})}/>
     <label>Full name<input required value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})}/></label>

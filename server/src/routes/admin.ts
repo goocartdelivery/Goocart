@@ -6,7 +6,7 @@ import { toFoodItemDTO, toRestaurantDTO } from "./catalog.js";
 import { toOrderDTO } from "./orders.js";
 import { VENDOR_PERMISSIONS, TERMINAL_STATUSES } from "../lib/orderState.js";
 import { isValidCoordinate } from "../lib/geo.js";
-import { geocodeAddress } from "../lib/geocode.js";
+import { fallbackGeocodeAddress, geocodeAddress } from "../lib/geocode.js";
 import { emitToAdmin } from "../lib/realtime.js";
 import { notifyUser } from "../lib/push.js";
 import { unassignPartner } from "../lib/delivery.js";
@@ -140,7 +140,7 @@ adminRouter.get("/restaurants", async (_req, res) => {
   try {
     const [restaurants, currentPricing] = await Promise.all([Restaurant.find().sort({ name: 1 }).lean(), getPricingSettings()]);
     const ownerIds = restaurants.map((r: any) => r.ownerUserId).filter(Boolean);
-    const owners = ownerIds.length ? await User.find({ _id: { $in: ownerIds } }, { name: 1, email: 1, username: 1 }).lean() : [];
+    const owners = ownerIds.length ? await User.find({ _id: { $in: ownerIds } }, { name: 1, email: 1, phone: 1, username: 1 }).lean() : [];
     const ownerById = new Map(owners.map((o: any) => [String(o._id), o]));
 
     // Delivered-order totals per vendor, for the grid's orders/value/payout
@@ -162,12 +162,13 @@ adminRouter.get("/restaurants", async (_req, res) => {
           return {
             ...toRestaurantDTO(r),
             address: r.address ?? "",
+            businessType: r.businessType ?? null,
             commissionPercent: r.commissionPercent ?? null,
             effectiveCommissionPercent: commissionPercent,
             totalOrders: stat?.orders ?? 0,
             totalOrderValue: Math.round(stat?.value ?? 0),
             commissionPayout: Math.round(Math.max(0, stat?.netFood ?? 0) * commissionPercent / 100),
-            owner: owner ? { id: String(r.ownerUserId), name: owner.name ?? "Unknown", email: owner.email ?? "", username: owner.username ?? null } : null,
+            owner: owner ? { id: String(r.ownerUserId), name: owner.name ?? "Unknown", email: owner.email ?? "", phone: owner.phone ?? null, username: owner.username ?? null } : null,
           };
         }),
       }),
@@ -204,9 +205,10 @@ adminRouter.post("/restaurants", async (req: AuthedRequest, res) => {
 
     // Coordinates are derived from the address instead of asking an admin to
     // look them up manually — see lib/geocode.ts.
-    const location = await geocodeAddress([address, area].filter(Boolean).join(", "));
+    const locationQuery = [address, area].filter(Boolean).join(", ");
+    const location = (await geocodeAddress(locationQuery)) ?? fallbackGeocodeAddress(locationQuery);
     if (!location || !isValidCoordinate(location.latitude, location.longitude)) {
-      return res.status(400).json(fail("GEOCODE_FAILED", "Could not determine this vendor's location from the address. Try adding more detail (landmark, city, pincode)."));
+      return res.status(400).json(fail("GEOCODE_FAILED", "Could not determine this vendor's location from the address. Include the city and pincode."));
     }
 
     const slugBase = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "vendor";
@@ -290,9 +292,10 @@ adminRouter.patch("/restaurants/:id", async (req: AuthedRequest, res) => {
       const address = req.body?.address !== undefined ? String(req.body.address).trim() : restaurant.address;
       const area = req.body?.area !== undefined ? String(req.body.area).trim() : restaurant.area;
       if (!address) return res.status(400).json(fail("INVALID_ADDRESS", "Enter the vendor's address."));
-      newLocation = await geocodeAddress([address, area].filter(Boolean).join(", "));
+      const locationQuery = [address, area].filter(Boolean).join(", ");
+      newLocation = (await geocodeAddress(locationQuery)) ?? fallbackGeocodeAddress(locationQuery);
       if (!newLocation || !isValidCoordinate(newLocation.latitude, newLocation.longitude)) {
-        return res.status(400).json(fail("GEOCODE_FAILED", "Could not determine this vendor's location from the address. Try adding more detail (landmark, city, pincode)."));
+        return res.status(400).json(fail("GEOCODE_FAILED", "Could not determine this vendor's location from the address. Include the city and pincode."));
       }
     }
 

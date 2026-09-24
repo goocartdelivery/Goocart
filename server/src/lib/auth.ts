@@ -13,7 +13,10 @@ const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_PER_WINDOW = 5;
 const OTP_WINDOW_MINUTES = 10;
 
-const ADMIN_ROLES = ["SUPER_ADMIN", "OPERATIONS_ADMIN", "FINANCE_ADMIN", "SUPPORT_ADMIN", "MARKETING_ADMIN", "CITY_ADMIN"];
+// "ADMIN" is retained for the existing local dashboard/seed data. The
+// frontend already recognizes it as an admin role, so omitting it here made
+// the dashboard load successfully while every protected admin action failed.
+const ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN", "OPERATIONS_ADMIN", "FINANCE_ADMIN", "SUPPORT_ADMIN", "MARKETING_ADMIN", "CITY_ADMIN"];
 
 export function canAdmin(u: { role: string }) {
   return ADMIN_ROLES.includes(u.role);

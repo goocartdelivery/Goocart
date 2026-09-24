@@ -103,6 +103,13 @@ async function handleLogin(req: Request, res: Response) {
     // Transparently upgrade a migrated D1 PBKDF2 password after it has been
     // proven correct. No reset is required and future logins use bcrypt.
     if (user.passwordHash.startsWith("pbkdf2$")) user.passwordHash = await hashPassword(password);
+    // An account can predate ADMIN_USER_EMAILS being configured. Keep the
+    // configured administrator list authoritative at sign-in time so a local
+    // admin does not end up in the dashboard with a CUSTOMER role and every
+    // management action rejected as "Admin access required".
+    if (defaultRoleForEmail(user.email) === "SUPER_ADMIN" && user.role !== "SUPER_ADMIN") {
+      user.role = "SUPER_ADMIN";
+    }
     user.lastLoginAt = new Date();
     await user.save();
     const token = await createSession(user._id, { ip: req.ip, userAgent: req.header("user-agent") });
