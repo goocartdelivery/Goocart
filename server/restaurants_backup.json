@@ -1,0 +1,71 @@
+[
+  {
+    "_id": "86ab6eacccc6ac3bb0b1c4f1",
+    "area": "Main Road, Jangareddigudem",
+    "categories": [
+      {
+        "key": "r1-recommended",
+        "name": "Recommended",
+        "sortOrder": 1
+      },
+      {
+        "key": "r1-biryani",
+        "name": "Biryani",
+        "sortOrder": 2
+      },
+      {
+        "key": "r1-starters",
+        "name": "Starters",
+        "sortOrder": 3
+      },
+      {
+        "key": "r1-beverages",
+        "name": "Beverages",
+        "sortOrder": 4
+      }
+    ],
+    "cuisines": [
+      "Biryani",
+      "Indian",
+      "Chinese"
+    ],
+    "deliveryTimeMax": 30,
+    "deliveryTimeMin": 25,
+    "distanceKm": 2.4,
+    "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=800&q=70",
+    "isOpen": true,
+    "latitude": 17.4368,
+    "legacyId": "r1",
+    "longitude": 81.2668,
+    "name": "Paradise Biryani",
+    "offers": [
+      {
+        "title": "50% OFF up to ₹120",
+        "description": "Use code GOO50",
+        "_id": "6aa2efe0e82dd914007d86d6"
+      },
+      {
+        "title": "FREE DELIVERY",
+        "description": "On orders above ₹199",
+        "_id": "6aa2efe0e82dd914007d86d7"
+      }
+    ],
+    "ownerUserId": "eba1bb7a0ecd69796828e63f",
+    "priceForOne": 200,
+    "priceForTwo": 400,
+    "rating": 4.5,
+    "ratingCount": 3200,
+    "slug": "r1",
+    "vegOnly": false,
+    "updatedAt": "2026-09-22T17:37:02.953Z",
+    "manualOrderAcceptance": false,
+    "address": "",
+    "autoAcceptanceMode": "MANUAL",
+    "averagePreparationMinutes": 25,
+    "maxSimultaneousOrders": 12,
+    "maximumQueue": 20,
+    "serviceRadiusKm": 8,
+    "status": "ACTIVE",
+    "temporaryBusyMode": false
+  }
+]

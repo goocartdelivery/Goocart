@@ -1,0 +1,139 @@
+[
+  {
+    "_id": "c2d305ac6a44446abda21367",
+    "addonGroups": [
+      {
+        "key": "f1-extras",
+        "name": "Add Extras",
+        "required": false,
+        "multiSelect": true,
+        "maxSelect": null,
+        "options": [
+          {
+            "key": "f1-egg",
+            "name": "Boiled Egg",
+            "price": 20
+          },
+          {
+            "key": "f1-chicken",
+            "name": "Extra Chicken",
+            "price": 80
+          },
+          {
+            "key": "f1-gravy",
+            "name": "Extra Gravy",
+            "price": 30
+          }
+        ]
+      }
+    ],
+    "available": true,
+    "bestseller": true,
+    "categoryKey": "r1-biryani",
+    "description": "Aromatic basmati rice slow-cooked with spiced chicken.",
+    "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=400&q=70",
+    "legacyId": "f1",
+    "name": "Chicken Dum Biryani",
+    "price": 210,
+    "rating": 4.6,
+    "ratingCount": 1200,
+    "restaurantId": "86ab6eacccc6ac3bb0b1c4f1",
+    "slug": "f1",
+    "variants": [
+      {
+        "key": "f1-regular",
+        "name": "Regular",
+        "price": 220,
+        "sortOrder": 1
+      },
+      {
+        "key": "f1-large",
+        "name": "Large",
+        "price": 340,
+        "sortOrder": 2
+      }
+    ],
+    "veg": false,
+    "updatedAt": "2026-09-11T08:22:48.137Z",
+    "discountPercent": 0
+  },
+  {
+    "_id": "90167fdbf83a1db076996b1d",
+    "addonGroups": [],
+    "available": true,
+    "bestseller": false,
+    "categoryKey": "r1-biryani",
+    "description": "Basmati rice cooked with fresh garden vegetables.",
+    "imageUrl": "https://images.unsplash.com/photo-1596797038530-2c107229654b?auto=format&fit=crop&w=400&q=70",
+    "legacyId": "f2",
+    "name": "Veg Biryani",
+    "price": 180,
+    "rating": 4.3,
+    "ratingCount": 540,
+    "restaurantId": "86ab6eacccc6ac3bb0b1c4f1",
+    "slug": "f2",
+    "variants": [],
+    "veg": true,
+    "updatedAt": "2026-09-23T17:10:23.842Z",
+    "discountPercent": 0
+  },
+  {
+    "_id": "1a1ce6752500385074c173ba",
+    "addonGroups": [],
+    "available": true,
+    "bestseller": false,
+    "categoryKey": "r1-starters",
+    "description": "Spicy, deep-fried chicken bites tossed with curry leaves.",
+    "imageUrl": "https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=400&q=70",
+    "legacyId": "f3",
+    "name": "Chicken 65",
+    "price": 220,
+    "rating": 4.4,
+    "ratingCount": 610,
+    "restaurantId": "86ab6eacccc6ac3bb0b1c4f1",
+    "slug": "f3",
+    "variants": [],
+    "veg": false,
+    "updatedAt": "2026-09-24T12:34:02.462Z",
+    "discountPercent": 0
+  },
+  {
+    "_id": "38fa21e34dbae25543931688",
+    "addonGroups": [],
+    "available": true,
+    "bestseller": false,
+    "categoryKey": "r1-beverages",
+    "description": "Chilled 300ml soft drink.",
+    "imageUrl": "https://images.unsplash.com/photo-1554866585-cd94860890b7?auto=format&fit=crop&w=400&q=70",
+    "legacyId": "f4",
+    "name": "Coke",
+    "price": 40,
+    "rating": 0,
+    "ratingCount": 0,
+    "restaurantId": "86ab6eacccc6ac3bb0b1c4f1",
+    "slug": "f4",
+    "variants": [],
+    "veg": true,
+    "updatedAt": "2026-09-10T17:58:57.598Z"
+  },
+  {
+    "_id": "6aa2c247548648422966d407",
+    "slug": "r1-manchurian",
+    "restaurantId": "86ab6eacccc6ac3bb0b1c4f1",
+    "categoryKey": "Chinese",
+    "name": "Manchurian",
+    "description": "Crispy vegetable balls tossed in a spicy Indo-Chinese sauce.",
+    "imageUrl": null,
+    "price": 199,
+    "veg": true,
+    "rating": 0,
+    "ratingCount": 0,
+    "bestseller": false,
+    "available": true,
+    "discountPercent": 0,
+    "variants": [],
+    "addonGroups": [],
+    "createdAt": "2026-09-10T14:44:23.121Z",
+    "updatedAt": "2026-09-23T17:10:28.129Z"
+  }
+]
