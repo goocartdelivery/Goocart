@@ -5,7 +5,7 @@
 // Images are Unsplash CDN URLs, free for commercial use without attribution.
 // Replace any imageUrl with a real photograph when you have one.
 
-export const SERVICES = ["Food","Grocery","Vegetables","Mart","Medicine","Bike Taxi","Parcel"];
+export const SERVICES = ["Food","Grocery","Vegetables","Mart","Medicine","Meat","Bike Taxi","Parcel"];
 
 export const SEED_ROLES = [
   {

@@ -1412,7 +1412,7 @@ adminRouter.post("/products", async (req: AuthedRequest, res) => {
     const price = Number(body.price);
 
     if (name.length < 2) return res.status(400).json(fail("INVALID_NAME", "Enter a product name."));
-    if (!["Grocery", "Vegetables", "Mart", "Medicine"].includes(service)) return res.status(400).json(fail("INVALID_SERVICE", "Service must be Grocery, Vegetables, Mart or Medicine."));
+    if (!["Grocery", "Vegetables", "Mart", "Medicine", "Meat"].includes(service)) return res.status(400).json(fail("INVALID_SERVICE", "Service must be Grocery, Vegetables, Mart or Medicine."));
     if (!Number.isFinite(price) || price <= 0) return res.status(400).json(fail("INVALID_PRICE", "Enter a valid price."));
 
     // Admin acts as the vendor of record for these platform-run catalogs —

@@ -241,6 +241,7 @@ const SERVICE_NAMES: Record<string, string> = {
   VEGETABLES: "Vegetables",
   MART: "Mart",
   MEDICINE: "Medicine",
+  MEAT: "Meat",
   BIKE_TAXI: "Bike Taxi",
   PARCEL: "Parcel",
 };
@@ -390,7 +391,7 @@ customerRouter.get("/directions", async (req, res) => {
 customerRouter.get("/services/:key/products", async (req, res) => {
   try {
     const service = SERVICE_NAMES[String(req.params.key).toUpperCase()];
-    if (!["Grocery", "Vegetables", "Mart", "Medicine"].includes(service)) return res.status(400).json(fail("INVALID_SERVICE", "This service does not have a product catalog."));
+    if (!["Grocery", "Vegetables", "Mart", "Medicine", "Meat"].includes(service)) return res.status(400).json(fail("INVALID_SERVICE", "This service does not have a product catalog."));
     const config: any = await ServiceConfig.findById(service).lean();
     if (config?.enabled === false) return res.status(409).json(fail("SERVICE_UNAVAILABLE", `${service} is temporarily unavailable.`));
     const category = String(req.query.category ?? "").trim();
@@ -464,7 +465,7 @@ customerRouter.post("/service-orders", requireAuth, async (req: AuthedRequest, r
     // same store vendor, so every line is validated against its own `service`
     // (any of the store services) and every line must come from the same
     // vendor — preserving the existing per-service and single-vendor rules.
-    const STORE_SERVICES = new Set(["Grocery", "Vegetables", "Mart", "Medicine"]);
+    const STORE_SERVICES = new Set(["Grocery", "Vegetables", "Mart", "Medicine", "Meat"]);
     const isStoreOrder = STORE_SERVICES.has(service);
 
     const lines: any[] = [];

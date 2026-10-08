@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 
-type Service = "Food" | "Grocery" | "Vegetables" | "Mart" | "Medicine" | "Bike Taxi" | "Parcel";
+type Service = "Food" | "Grocery" | "Vegetables" | "Mart" | "Medicine" | "Meat" | "Bike Taxi" | "Parcel";
 type Product = { id:string; service:Service; vendor:string; name:string; description:string; image_url:string|null; price:number; mrp:number|null; unit:string|null; category:string; prescription_required?:boolean; stock:number; rating:number; eta:string };
 type Order = { id:string; reference:string; service:Service; vendor:string; vendor_id:string; customer:string; customer_id:string; partner:string|null; partner_id:string|null; status:string; total:number; details:Record<string,unknown>; created_at:string; updated_at:string };
 type Offer = { id:string;vendor_id:string;vendor:string;title:string;code:string;discount_percent:number;min_order:number;active:number;created_at:string;updated_at:string };
@@ -13,8 +13,8 @@ type ApiResult = { success:boolean; data?:Snapshot; error?:{code?:string;message
 type ErrorState = { code:string; message:string };
 
 const adminNav:string[] = ["Dashboard","Live Orders","Live Operations","Orders","Rides","Parcels","Vendors","Delivery Partners","Customers","Catalog","Discounts & Pricing","Automation","Finance","Support","Reports","Settings"];
-const commerce:Service[] = ["Food","Grocery","Vegetables","Mart","Medicine"];
-const allServices:Service[] = ["Food","Grocery","Vegetables","Mart","Medicine","Bike Taxi","Parcel"];
+const commerce:Service[] = ["Food","Grocery","Vegetables","Mart","Medicine","Meat"];
+const allServices:Service[] = ["Food","Grocery","Vegetables","Mart","Medicine","Meat","Bike Taxi","Parcel"];
 const MEDICINE_SUBCATEGORIES:[string,string][] = [["prescription-medicines","Prescription"],["pain-relief","Pain Relief"],["cold-flu","Cold & Flu"],["vitamins-supplements","Vitamins"],["diabetes-care","Diabetes"],["personal-care","Personal Care"],["baby-care","Baby Care"],["first-aid","First Aid"],["healthcare-devices","Devices"]];
 const money = (value:number) => `₹${Math.round(value).toLocaleString("en-IN")}`;
 const label = (value:string) => value.replaceAll("_"," ").toLowerCase().replace(/\b\w/g,(x)=>x.toUpperCase());
@@ -156,6 +156,7 @@ function CreateProductForm({onCreated}:{onCreated:()=>void}){
         <option value="Vegetables">Vegetables</option>
         <option value="Mart">Mart</option>
         <option value="Medicine">Medicine</option>
+        <option value="Meat">Meat</option>
       </select>
     </label>
     {form.service==="Medicine"&&<label>Subcategory
@@ -499,7 +500,7 @@ function VendorPercentOffersPanel({restaurantId}:{restaurantId:string}){
 
   const add=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError("");
     try{
-      const code=`${(form.title.toLowerCase().replace(/[^a-z0-9]+/g,"").slice(0,10)||"offer")}${Date.now().toString(36)}`.toUpperCase();
+      const code=`${(form.title.toLowerCase().replace(/[a-z0-9]+/g,"").slice(0,10)||"offer")}${Date.now().toString(36)}`.toUpperCase();
       await adminApi("/coupons",{method:"POST",body:JSON.stringify({code,title:form.title,type:"PERCENT",value:Number(form.percent),minOrder:Number(form.minOrder)||0,targetRestaurantIds:[restaurantId]})});
       setForm({title:"",percent:"",minOrder:"0"});setShowAdd(false);await load();
     }catch(e){setError(e instanceof Error?e.message:"Could not add this offer");}finally{setBusy(false);}

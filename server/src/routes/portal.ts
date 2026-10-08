@@ -23,7 +23,7 @@ import { claimDelivery } from "../lib/delivery.js";
 
 export const portalRouter = Router();
 
-const COMMERCE = ["Food", "Grocery", "Vegetables", "Mart", "Medicine"];
+const COMMERCE = ["Food", "Grocery", "Vegetables", "Mart", "Medicine", "Meat"];
 const SERVICES = [...COMMERCE, "Bike Taxi", "Parcel"];
 const TERMINAL = ["DELIVERED", "COMPLETED", "CANCELLED_BY_ADMIN", "CANCELLED_BY_CUSTOMER", "VENDOR_REJECTED"];
 
